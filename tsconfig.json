@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "target": "ES2018",
+    "module": "ESNext",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "moduleResolution": "Bundler",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true
+  },
+  "include": ["src"]
+}

@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Rendered output (regenerate with ./render.sh)
+out/
+
+# Reference material only — large source recordings, extracted frames,
+# downloaded reference videos. Not needed to build the promo.
+assets/
+
+# Secrets — never commit API keys
+.elevenlabs_key
+*.key
+.env
+.env.local
+
+# Logs / temp
+*.log
+*.tar.gz
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Claude Code local settings (machine-specific)
+.claude/settings.local.json
