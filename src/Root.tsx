@@ -3,6 +3,9 @@ import { PlivoLogo } from "./PlivoLogo";
 import { VibePromo } from "./VibePromo";
 import { CardsShowcase } from "./CardsShowcase";
 import { VibePromoNative } from "./VibePromoNative";
+import { VibePromoTight, TIGHT_TOTAL_FRAMES } from "./VibePromoTight";
+import { VibePromoMerged, MERGED_TOTAL_FRAMES } from "./VibePromoMerged";
+import { IntroShimmer, IntroGlow } from "./IntroVariants";
 import {
   PROMO_FPS,
   PROMO_HEIGHT,
@@ -43,6 +46,58 @@ export const RemotionRoot: React.FC = () => {
         id="VibePromoNativeVO"
         component={VibePromoNative}
         durationInFrames={TOTAL_FRAMES}
+        fps={PROMO_FPS}
+        width={PROMO_WIDTH}
+        height={PROMO_HEIGHT}
+        defaultProps={{ voiceOver: true }}
+      />
+      <Composition
+        id="IntroOptionA"
+        component={IntroShimmer}
+        durationInFrames={110}
+        fps={PROMO_FPS}
+        width={PROMO_WIDTH}
+        height={PROMO_HEIGHT}
+      />
+      <Composition
+        id="IntroOptionB"
+        component={IntroGlow}
+        durationInFrames={110}
+        fps={PROMO_FPS}
+        width={PROMO_WIDTH}
+        height={PROMO_HEIGHT}
+      />
+      <Composition
+        id="VibePromoMergedVO"
+        component={VibePromoMerged}
+        durationInFrames={MERGED_TOTAL_FRAMES}
+        fps={PROMO_FPS}
+        width={PROMO_WIDTH}
+        height={PROMO_HEIGHT}
+        defaultProps={{ voiceOver: true }}
+      />
+      <Composition
+        id="VibePromoMerged"
+        component={VibePromoMerged}
+        durationInFrames={MERGED_TOTAL_FRAMES}
+        fps={PROMO_FPS}
+        width={PROMO_WIDTH}
+        height={PROMO_HEIGHT}
+        defaultProps={{ voiceOver: false }}
+      />
+      <Composition
+        id="VibePromoTight"
+        component={VibePromoTight}
+        durationInFrames={TIGHT_TOTAL_FRAMES}
+        fps={PROMO_FPS}
+        width={PROMO_WIDTH}
+        height={PROMO_HEIGHT}
+        defaultProps={{ voiceOver: false }}
+      />
+      <Composition
+        id="VibePromoTightVO"
+        component={VibePromoTight}
+        durationInFrames={TIGHT_TOTAL_FRAMES}
         fps={PROMO_FPS}
         width={PROMO_WIDTH}
         height={PROMO_HEIGHT}

@@ -13,6 +13,10 @@ export type ScenarioRow = {
   // of the neutral "Running" spinner — used in the self-improvement beat to
   // show a failing test being fixed and flipping to High quality.
   startsFailed?: boolean;
+  // The goal this scenario checks (shown in the Goal Status column).
+  goal?: string;
+  // Conversation Quality shown once passed (default "High").
+  quality?: "High" | "Medium" | "Low";
 };
 
 export type TestScenariosTableProps = {
@@ -120,22 +124,28 @@ export const TestScenariosTable: React.FC<TestScenariosTableProps> = ({
             }}
           >
             <div>{r.name}</div>
-            <div style={{ color: "#6b7280" }}>
+            <div>
               {passed ? (
-                "No goals configured"
+                <span style={{ color: "#059669", fontWeight: 600 }}>✓ Achieved</span>
               ) : r.startsFailed ? (
-                <span style={{ color: "#ef4444" }}>✕ Needs work</span>
+                <span style={{ color: "#ef4444" }}>✕ Not achieved</span>
               ) : (
-                <span>↻ Running</span>
+                <span style={{ color: "#6b7280" }}>↻ Running</span>
               )}
             </div>
             <div
               style={{
-                color: passed ? "#059669" : r.startsFailed ? "#ef4444" : "#6b7280",
+                color: passed
+                  ? (r.quality ?? "High") === "Medium"
+                    ? "#d97706"
+                    : "#059669"
+                  : r.startsFailed
+                    ? "#ef4444"
+                    : "#6b7280",
                 fontWeight: passed ? 600 : 400,
               }}
             >
-              {passed ? "High" : r.startsFailed ? "Low" : "↻ Running"}
+              {passed ? (r.quality ?? "High") : r.startsFailed ? "Low" : "↻ Running"}
             </div>
             <div>
               <span

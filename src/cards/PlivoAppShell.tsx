@@ -29,6 +29,8 @@ export type PlivoAppShellProps = {
   // Show a cursor clicking the top-bar "Ask Buddy" button at a given frame
   // (and highlight the button), to open the Ask Buddy panel.
   buddyCursorFrame?: number;
+  // Show a cursor clicking the header "Publish" button at a given frame.
+  publishCursorFrame?: number;
 };
 
 // The real Plivo "AI Agents" left nav, collapsed to its icon rail (matches the
@@ -166,6 +168,7 @@ export const PlivoAppShell: React.FC<PlivoAppShellProps> = ({
   highlightActiveTab = false,
   tabCursor,
   buddyCursorFrame,
+  publishCursorFrame,
 }) => {
   return (
     <div
@@ -262,7 +265,13 @@ export const PlivoAppShell: React.FC<PlivoAppShellProps> = ({
         <span style={{ color: "#6b7280", fontSize: 18 }}>⋮</span>
         <div style={pill("#ffffff", "#6b7280")}>▷ Test agent</div>
         <div style={pill("#ffffff", "#6b7280")}>Save as draft</div>
-        <div style={pill("#0f1117", "#ffffff")}>Publish</div>
+        <div style={{ ...pill("#0f1117", "#ffffff"), position: "relative" }}>
+          Publish
+          {publishCursorFrame != null ? (
+            // Land the cursor tip in the center of the Publish button.
+            <ClickCursor clickAtFrame={publishCursorFrame} approach="tl" offset={{ x: 40, y: 14 }} />
+          ) : null}
+        </div>
       </div>
 
       {/* Tab bar */}

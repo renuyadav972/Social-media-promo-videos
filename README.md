@@ -20,10 +20,10 @@ the voice/music, then re-render.
 npm install            # first time only
 
 # Render a composition to out/<name>.mp4
-npx remotion render src/index.ts VibePromoNativeVO out/promo-voiceover.mp4
+npx remotion render src/index.ts VibePromoMergedVO out/promo-voiceover.mp4
 
 # or use the helper (handles a standalone Node download + binary perms on macOS):
-./render.sh VibePromoNativeVO out/promo-voiceover.mp4
+./render.sh VibePromoMergedVO out/promo-voiceover.mp4
 ```
 
 Preview/scrub interactively in Remotion Studio:
@@ -36,10 +36,23 @@ npm run dev            # opens http://localhost:3000
 
 | id | what it is |
 |----|------------|
-| **`VibePromoNativeVO`** | The main promo, **voiceover + music** (code-drawn screens). |
-| **`VibePromoNative`** | Same promo, **music only**. |
+| **`VibePromoMergedVO`** | **The primary cut (~50s)**, voiceover + music. Cream background, brand intro, streaming Vibe Agent chat (build + simulations), real Plivo flow + simulations screens, locked steady cameras. |
+| **`VibePromoMerged`** | Same cut, **music only**. |
+| `VibePromoTightVO` / `VibePromoTight` | An earlier tight ~42s cut (voiceover+music / music-only). |
+| `VibePromoNativeVO` / `VibePromoNative` | The original ~63s purple cut. |
 | `VibePromo` | Alternate cut that composites real Loom screen-recordings (`public/clips/`). |
 | `CardsShowcase`, `PlivoLogo` | Component/logo showcases. |
+
+The primary cut is `src/VibePromoMerged.tsx` — beat order, durations, captions
+and narration timings are all derived from one `DUR` table, so retiming is a
+one-line change. The cream camera wrapper is `src/TightStageClip.tsx`, the
+muted-friendly captions `src/TightCaption.tsx`, the intro animation
+`src/IntroVariants.tsx`, and the streaming agent chat `src/cards/AgentChatPanel.tsx`.
+Narration lives in `public/vo/merged/`, the music bed in `public/vibe-music.mp3`.
+
+> **Template goal:** keep every screen/beat code-driven and config-first so a
+> raw product recording can eventually be turned into a finished promo
+> automatically (map recording → beats → captions → narration → render).
 
 ## Project structure
 

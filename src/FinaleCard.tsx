@@ -49,11 +49,11 @@ export const FinaleCard: React.FC = () => {
       >
         <div
           style={{
-            fontSize: 58,
+            fontSize: 74,
             fontWeight: 600,
-            letterSpacing: -2,
+            letterSpacing: -2.4,
             lineHeight: 1.0,
-            // Brand gradient on the wordmark.
+            // Brand gradient (purple) on the wordmark.
             backgroundImage: "linear-gradient(95deg, #cd3ef9 0%, #9333ea 100%)",
             WebkitBackgroundClip: "text",
             backgroundClip: "text",
@@ -67,14 +67,13 @@ export const FinaleCard: React.FC = () => {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            gap: 13,
-            marginTop: 20,
+            gap: 17,
+            marginTop: 26,
           }}
         >
-          <span style={{ fontSize: 24, fontWeight: 400, color: "#0f1117", opacity: 0.6 }}>
-            by
-          </span>
-          <PlivoLogoSvg width={130} />
+          {/* "by" in soft gray; Plivo wordmark in its actual black. */}
+          <span style={{ fontSize: 30, fontWeight: 400, color: "#0f1117", opacity: 0.55 }}>by</span>
+          <PlivoLogoSvg width={170} />
         </div>
       </div>
     </AbsoluteFill>

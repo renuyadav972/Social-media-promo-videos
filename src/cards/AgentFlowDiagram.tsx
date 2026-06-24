@@ -122,9 +122,23 @@ export const AgentFlowDiagram: React.FC<AgentFlowDiagramProps> = ({
           const y1 = from.y + NODE_HEIGHT;
           const x2 = to.x + toWidth / 2;
           const y2 = to.y;
-          // S-curve bezier so the lines look like flow connectors.
-          const dy = (y2 - y1) * 0.55;
-          const path = `M ${x1} ${y1} C ${x1} ${y1 + dy}, ${x2} ${y2 - dy}, ${x2} ${y2}`;
+          // Orthogonal "elbow" connector with rounded corners (matches the real
+          // Plivo flow canvas): straight down from the parent to a branch bus,
+          // across, then straight down to the child — not a smooth S-curve.
+          const midY = Math.min(y1 + 38, y2 - 14);
+          const r = Math.min(9, Math.abs(x2 - x1) / 2, Math.abs(y2 - midY));
+          let path: string;
+          if (Math.abs(x2 - x1) < 1.5) {
+            path = `M ${x1} ${y1} L ${x2} ${y2}`;
+          } else {
+            const dir = x2 > x1 ? 1 : -1;
+            path =
+              `M ${x1} ${y1} L ${x1} ${midY - r} ` +
+              `Q ${x1} ${midY} ${x1 + dir * r} ${midY} ` +
+              `L ${x2 - dir * r} ${midY} ` +
+              `Q ${x2} ${midY} ${x2} ${midY + r} ` +
+              `L ${x2} ${y2}`;
+          }
           const reveal = interpolate(
             frame,
             [e.appearAtFrame, e.appearAtFrame + 18],
@@ -151,8 +165,8 @@ export const AgentFlowDiagram: React.FC<AgentFlowDiagramProps> = ({
               />
               {e.label ? (
                 <foreignObject
-                  x={(x1 + x2) / 2 - 90}
-                  y={(y1 + y2) / 2 - 14}
+                  x={x2 - 90}
+                  y={midY - 13}
                   width={180}
                   height={28}
                 >
