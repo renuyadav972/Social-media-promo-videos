@@ -19,7 +19,9 @@ const NAME_STYLE: React.CSSProperties = {
   fontSize: 80,
   fontWeight: 600,
   letterSpacing: -2.6,
-  lineHeight: 1.0,
+  // lineHeight 1.0 + background-clip:text clips the "g" descender — give it room.
+  lineHeight: 1.25,
+  paddingBottom: 4,
 };
 const CLAMP = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
 const EASE_OUT = { easing: Easing.out(Easing.cubic), ...CLAMP } as const;

@@ -23,6 +23,19 @@ export type TestScenariosTableProps = {
   rows: ScenarioRow[];
 };
 
+const pillStyle = (bg: string, color: string): React.CSSProperties => ({
+  display: "inline-flex",
+  alignItems: "center",
+  gap: 4,
+  padding: "3px 11px",
+  borderRadius: 999,
+  background: bg,
+  color,
+  fontSize: 12.5,
+  fontWeight: 600,
+  whiteSpace: "nowrap",
+});
+
 export const TestScenariosTable: React.FC<TestScenariosTableProps> = ({
   rows,
 }) => {
@@ -126,26 +139,20 @@ export const TestScenariosTable: React.FC<TestScenariosTableProps> = ({
             <div>{r.name}</div>
             <div>
               {passed ? (
-                <span style={{ color: "#059669", fontWeight: 600 }}>✓ Achieved</span>
-              ) : r.startsFailed ? (
-                <span style={{ color: "#ef4444" }}>✕ Not achieved</span>
+                <span style={pillStyle("#ecfdf5", "#059669")}>✓ Achieved</span>
               ) : (
-                <span style={{ color: "#6b7280" }}>↻ Running</span>
+                <span style={pillStyle("#f4f5f7", "#6b7280")}>↻ Running</span>
               )}
             </div>
-            <div
-              style={{
-                color: passed
-                  ? (r.quality ?? "High") === "Medium"
-                    ? "#d97706"
-                    : "#059669"
-                  : r.startsFailed
-                    ? "#ef4444"
-                    : "#6b7280",
-                fontWeight: passed ? 600 : 400,
-              }}
-            >
-              {passed ? (r.quality ?? "High") : r.startsFailed ? "Low" : "↻ Running"}
+            <div>
+              {/* Conversation Quality is PRE-ASSIGNED — shown from the start and
+                  never changes. Only the Goal Status flips as the sim completes. */}
+              {(() => {
+                const q = r.quality ?? "High";
+                const [bg, fg] =
+                  q === "High" ? ["#ecfdf5", "#059669"] : q === "Medium" ? ["#fffbeb", "#d97706"] : ["#fef2f2", "#ef4444"];
+                return <span style={pillStyle(bg, fg)}>{q}</span>;
+              })()}
             </div>
             <div>
               <span

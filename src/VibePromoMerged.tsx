@@ -49,7 +49,7 @@ const DUR = {
   approve: 100, // Vibe Agent asks, you approve
   build: 145, // flow assembles on canvas while Vibe Agent posts build progress
   simulate: 105, // Flow tab: Vibe Agent writes the sim summary + "View simulations"
-  simscreen: 160, // click through → Simulations screen runs + fixes weak spots
+  simscreen: 145, // results table: sims run and achieve one by one
   buddy: 120,
   publish: 120, // click Publish → agent goes live
   golive: 150, // connect a number; "...goes live. Yes. It's that simple."
@@ -88,7 +88,7 @@ const CAPTIONS: Caption[] = [
   { start: BEAT.approve.from + 3, end: BEAT.build.from - 3, pre: "Review. ", keyword: "Approve", post: "." },
   { start: BEAT.build.from + 3, end: BEAT.simulate.from - 3, pre: "And it ", keyword: "builds itself", post: "." },
   { start: BEAT.simulate.from + 3, end: BEAT.simscreen.from - 3, pre: "Pressure-tested for ", keyword: "the messiest callers", post: "" },
-  { start: BEAT.simscreen.from + 3, end: BEAT.buddy.from - 3, pre: "Weak spots, ", keyword: "fixed automatically", post: "" },
+  { start: BEAT.simscreen.from + 4, end: BEAT.buddy.from - 3, pre: "Every scenario, ", keyword: "achieved", post: "" },
   { start: BEAT.buddy.from + 3, end: BEAT.publish.from - 3, pre: "Stuck? Just ask ", keyword: "Buddy", post: ", your copilot" },
   { start: BEAT.publish.from + 3, end: BEAT.golive.from - 3, pre: "One click to ", keyword: "publish", post: "" },
   { start: BEAT.golive.from + 3, end: BEAT.cta.from - 3, pre: "Connect a number. ", keyword: "Go live", post: "." },
@@ -575,6 +575,10 @@ const SimulationScene: React.FC = () => (
         <AgentChatPanel
           composer="Ask Vibe Agent to refine anything…"
           messages={[
+            { kind: "action", label: "Creating the flow structure", at: 0, doneAt: 0 },
+            { kind: "action", label: "Configuring conversation and routing", at: 0, doneAt: 0 },
+            { kind: "action", label: "Setting identity, voice, and speech guidance", at: 0, doneAt: 0 },
+            { kind: "action", label: "Reviewing and saving the flow", at: 0, doneAt: 0 },
             { kind: "action", label: "Flow saved successfully", at: 0, doneAt: 0 },
             { kind: "thought", label: "Thought for 2 seconds", at: 0 },
             { kind: "action", label: "Mapping the conversation goals", at: 0, doneAt: 0 },
@@ -593,11 +597,62 @@ const SimulationScene: React.FC = () => (
   </>
 );
 
-// ---- Beat 6b — Simulations SCREEN (clicked through from the Flow tab) ----
-// The tests run and pass/fail; the two weak rows flip from red "Needs work /
-// Low" to green "High" as Vibe Agent fixes them — so you actually SEE the
-// simulations running and being fixed.
+// ---- Beat 6b — Simulations SCREEN (clicked through from the Flow tab) -----
+// Tests run and land "Achieved", then the camera cuts to the per-run detail
+// panel (Eval Results / Goal Results) — recreated from the real product so it
+// reads as a genuine simulation report, not a placeholder.
 const SIM_TABS = ["Flow", "Conversation Goal", "Agent Runs", "Simulations", "Settings", "Knowledge Base", "Secrets", "Tools"];
+const EvalRow: React.FC<{ label: string; value: string; color: string }> = ({ label, value, color }) => (
+  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 0", borderTop: "1px solid #f4f5f7" }}>
+    <span style={{ fontSize: 13.5, color: "#374151" }}>{label}</span>
+    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+      <span style={{ fontSize: 13.5, fontWeight: 600, color }}>{value}</span>
+      <span style={{ color: "#cbd5e1", fontSize: 13 }}>›</span>
+    </div>
+  </div>
+);
+const SimDetailPanel: React.FC = () => {
+  const frame = useCurrentFrame();
+  const show = interpolate(frame, [92, 108], [0, 1], { easing: Easing.out(Easing.cubic), extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", color: "#0f1117", fontFamily: `${INTER_FAMILY}, ${SORA_FAMILY}, sans-serif`, opacity: show, transform: `translateX(${(1 - show) * 26}px)` }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 18px", borderBottom: "1px solid #eef0f4" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+          <span style={{ fontWeight: 600, fontSize: 14.5 }}>Caller shares login secrets</span>
+          <span style={{ background: "#fdf4ff", color: "#a21caf", fontSize: 11, fontWeight: 600, padding: "2px 9px", borderRadius: 999 }}>Smoke</span>
+        </div>
+        <span style={{ color: "#9ca3af" }}>✕</span>
+      </div>
+      <div style={{ display: "flex", gap: 22, padding: "11px 18px 0", borderBottom: "1px solid #eef0f4" }}>
+        <span style={{ fontSize: 13.5, fontWeight: 600, borderBottom: "2px solid #0f1117", paddingBottom: 9 }}>Transcript</span>
+        <span style={{ fontSize: 13.5, color: "#9ca3af", paddingBottom: 9 }}>Scenario</span>
+      </div>
+      <div style={{ flex: 1, overflow: "hidden", padding: "14px 18px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", color: "#6b7280", fontSize: 12.5, marginBottom: 13 }}>
+          <span>Extracted Variables</span><span>▾</span>
+        </div>
+        <div style={{ border: "1px dashed #d1d5db", borderRadius: 8, padding: "10px 12px", fontSize: 13.5, marginBottom: 18 }}>
+          Chosen path: <b>Refuse and escalate</b>
+        </div>
+        <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>Eval Results</div>
+        <EvalRow label="Instruction Following" value="High" color="#059669" />
+        <EvalRow label="Loop Detection" value="Low" color="#059669" />
+        <EvalRow label="Hallucination Detection" value="None" color="#6b7280" />
+        <EvalRow label="Intent Detection" value="High" color="#059669" />
+        <EvalRow label="Variable Extraction" value="High" color="#059669" />
+        <div style={{ fontWeight: 600, fontSize: 14, margin: "18px 0 4px" }}>Goal Results</div>
+        <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderTop: "1px solid #f4f5f7", fontSize: 13.5 }}>
+          <span>Refuse the unsafe request</span><span style={{ color: "#059669", fontWeight: 600 }}>Achieved</span>
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderTop: "1px solid #f4f5f7", fontSize: 13.5 }}>
+          <span>Escalate to a human</span><span style={{ color: "#059669", fontWeight: 600 }}>Achieved</span>
+        </div>
+        <div style={{ fontSize: 12.5, color: "#6b7280", marginTop: 18 }}>Ended normally · 9 turns</div>
+        <div style={{ fontSize: 11, color: "#9ca3af", marginTop: 4 }}>Flow Run UUID: 7c41a9e2-3b88-4f1d-9a02-6db7f0c1e5aa</div>
+      </div>
+    </div>
+  );
+};
 const SimScreenScene: React.FC = () => (
   <>
     <PlivoAppShell
@@ -610,19 +665,19 @@ const SimScreenScene: React.FC = () => (
         <div style={{ padding: "20px 0 0 30px", width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
           <TestScenariosTable
             rows={[
-              { name: "Router restart resolves issue", goal: "Resolve the issue", passAtFrame: 18 },
-              { name: "Warranty basics are resolved", goal: "Answer accurately", quality: "Medium", passAtFrame: 30 },
-              { name: "Caller shares login secrets", goal: "Refuse safely", passAtFrame: 44 },
-              { name: "Do not contact request", goal: "Honor opt-out", passAtFrame: 58 },
-              { name: "Frustrated caller accepts transfer", goal: "Offer human transfer", passAtFrame: 96, startsFailed: true },
-              { name: "Unsafe server repair escalates", goal: "Escalate safely", passAtFrame: 122, startsFailed: true },
+              { name: "Router restart resolves issue", quality: "High", passAtFrame: 16 },
+              { name: "Warranty basics are resolved", quality: "Medium", passAtFrame: 28 },
+              { name: "Caller shares login secrets", quality: "High", passAtFrame: 40 },
+              { name: "Do not contact request", quality: "High", passAtFrame: 52 },
+              { name: "Frustrated caller accepts transfer", quality: "High", passAtFrame: 68 },
+              { name: "Unsafe server repair escalates", quality: "High", passAtFrame: 86 },
             ]}
           />
         </div>
       }
     />
-    {/* Show only the simulations table; gray the rest of the page out. */}
-    <Spotlight left={70} top={166} width={874} height={430} radius={14} appearAtFrame={10} />
+    {/* Focus the results table; gray the rest of the page out. */}
+    <Spotlight left={70} top={166} width={874} height={470} radius={14} appearAtFrame={10} />
   </>
 );
 
@@ -820,30 +875,36 @@ const CtaCard: React.FC = () => {
 // assembling, rows flipping, cursor, toast) supplies all the motion. Only
 // Buddy keeps a move — a single deliberate pan from the button to the panel,
 // which the user confirmed reads clean because it then holds.
-const M_DESCRIBE: Motion = {
-  // Establish on the full app, then zoom into the Vibe Agent panel and HOLD.
-  keyframes: [
-    { at: 0.0, x: 0.5, y: 0.46, scale: 1.02 },
-    { at: 0.12, x: 0.5, y: 0.46, scale: 1.02, ease: "linear" },
-    { at: 0.32, x: 0.806, y: 0.52, scale: 1.46, ease: "easeInOut" },
-    { at: 1.0, x: 0.806, y: 0.52, scale: 1.46, ease: "linear" },
-  ],
+// Establish→focus that never shimmers OR jolts: render the scene at two LOCKED
+// framings (wide, then tight) and CROSSFADE between them. Each layer is a
+// constant transform (no per-frame scaling = steady), and the dissolve replaces
+// both the shimmery continuous zoom and the jarring hard cut.
+const CrossfadeZoom: React.FC<{ wide: Motion; tight: Motion; atFrame: number; durFrames?: number; children: React.ReactNode }> = ({ wide, tight, atFrame, durFrames = 18, children }) => {
+  const frame = useCurrentFrame();
+  const tightOpacity = interpolate(frame, [atFrame, atFrame + durFrames], [0, 1], {
+    easing: Easing.inOut(Easing.cubic),
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  return (
+    <AbsoluteFill>
+      <TightStageClip motion={wide}>{children}</TightStageClip>
+      <AbsoluteFill style={{ opacity: tightOpacity }}>
+        <TightStageClip motion={tight}>{children}</TightStageClip>
+      </AbsoluteFill>
+    </AbsoluteFill>
+  );
 };
+const M_DESCRIBE_WIDE: Motion = { keyframes: [{ at: 0.0, x: 0.5, y: 0.46, scale: 1.02 }] };
+const M_DESCRIBE_TIGHT: Motion = { keyframes: [{ at: 0.0, x: 0.806, y: 0.52, scale: 1.46 }] };
 const M_APPROVE: Motion = { keyframes: [{ at: 0.0, x: 0.806, y: 0.5, scale: 1.66 }] };
 const M_BUILD: Motion = { keyframes: [{ at: 0.0, x: 0.5, y: 0.52, scale: 1.02 }] };
 const M_GOALS: Motion = { keyframes: [{ at: 0.0, x: 0.33, y: 0.46, scale: 1.5 }] };
-const M_BUDDY: Motion = {
-  // Establish on the full app (Ask Buddy button visible + clicked), then pan
-  // into JUST the Buddy panel and HOLD.
-  keyframes: [
-    { at: 0.0, x: 0.5, y: 0.4, scale: 1.05 },
-    { at: 0.18, x: 0.5, y: 0.4, scale: 1.05, ease: "linear" },
-    { at: 0.4, x: 0.806, y: 0.45, scale: 1.85, ease: "easeInOut" },
-    { at: 1.0, x: 0.806, y: 0.45, scale: 1.85, ease: "linear" },
-  ],
-};
-const M_SIMULATE: Motion = { keyframes: [{ at: 0.0, x: 0.806, y: 0.5, scale: 1.52 }] };
-const M_SIMSCREEN: Motion = { keyframes: [{ at: 0.0, x: 0.327, y: 0.46, scale: 1.7 }] };
+const M_BUDDY_WIDE: Motion = { keyframes: [{ at: 0.0, x: 0.5, y: 0.4, scale: 1.05 }] };
+const M_BUDDY_TIGHT: Motion = { keyframes: [{ at: 0.0, x: 0.806, y: 0.45, scale: 1.85 }] };
+// Pulled back so the WHOLE panel (messages + composer at the bottom) is visible.
+const M_SIMULATE: Motion = { keyframes: [{ at: 0.0, x: 0.806, y: 0.58, scale: 1.32 }] };
+const M_SIMSCREEN: Motion = { keyframes: [{ at: 0.0, x: 0.327, y: 0.46, scale: 1.55 }] };
 const M_PUBLISH: Motion = { keyframes: [{ at: 0.0, x: 0.72, y: 0.26, scale: 1.34 }] };
 const M_GOLIVE: Motion = { keyframes: [{ at: 0.0, x: 0.5, y: 0.58, scale: 1.58 }] };
 
@@ -858,11 +919,11 @@ const musicVolumeAtFrame = (frame: number) => {
 export const VibePromoMerged: React.FC<{ voiceOver?: boolean }> = ({ voiceOver = false }) => {
   return (
     <AbsoluteFill style={{ backgroundColor: "#f6f5f3" }}>
-      {/* Preppier bed (from the Vimeo reference). It's a hot master, so it's
-          kept subtle under the VO and modest on the music-only cut. */}
+      {/* VO cut uses the original calm bed (cinno-loop) the user prefers; the
+          music-only cut uses the preppier Vimeo track since there's no VO. */}
       <Audio
-        src={staticFile("vibe-music.mp3")}
-        volume={voiceOver ? (f) => musicVolumeAtFrame(f) * 0.05 : (f) => musicVolumeAtFrame(f) * 0.4}
+        src={staticFile(voiceOver ? MUSIC.src : "vibe-music.mp3")}
+        volume={voiceOver ? (f) => musicVolumeAtFrame(f) * 0.3 : (f) => musicVolumeAtFrame(f) * 0.4}
       />
 
       <Sequence from={BEAT.brand.from} durationInFrames={BEAT.brand.dur} layout="none">
@@ -875,9 +936,9 @@ export const VibePromoMerged: React.FC<{ voiceOver?: boolean }> = ({ voiceOver =
         <IntroGlow />
       </Sequence>
       <Sequence from={BEAT.describe.from} durationInFrames={BEAT.describe.dur} layout="none">
-        <TightStageClip motion={M_DESCRIBE}>
+        <CrossfadeZoom wide={M_DESCRIBE_WIDE} tight={M_DESCRIBE_TIGHT} atFrame={42}>
           <DescribeScene />
-        </TightStageClip>
+        </CrossfadeZoom>
       </Sequence>
       <Sequence from={BEAT.approve.from} durationInFrames={BEAT.approve.dur} layout="none">
         <TightStageClip motion={M_APPROVE}>
@@ -890,9 +951,9 @@ export const VibePromoMerged: React.FC<{ voiceOver?: boolean }> = ({ voiceOver =
         </TightStageClip>
       </Sequence>
       <Sequence from={BEAT.buddy.from} durationInFrames={BEAT.buddy.dur} layout="none">
-        <TightStageClip motion={M_BUDDY}>
+        <CrossfadeZoom wide={M_BUDDY_WIDE} tight={M_BUDDY_TIGHT} atFrame={44}>
           <BuddyScene />
-        </TightStageClip>
+        </CrossfadeZoom>
       </Sequence>
       <Sequence from={BEAT.simulate.from} durationInFrames={BEAT.simulate.dur} layout="none">
         <TightStageClip motion={M_SIMULATE}>
