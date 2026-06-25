@@ -5,6 +5,7 @@ import { CardsShowcase } from "./CardsShowcase";
 import { VibePromoNative } from "./VibePromoNative";
 import { VibePromoTight, TIGHT_TOTAL_FRAMES } from "./VibePromoTight";
 import { VibePromoMerged, MERGED_TOTAL_FRAMES } from "./VibePromoMerged";
+import { ConsoleComparison, CONSOLE_TOTAL_FRAMES } from "./ConsoleComparison";
 import { IntroShimmer, IntroGlow } from "./IntroVariants";
 import {
   PROMO_FPS,
@@ -98,6 +99,24 @@ export const RemotionRoot: React.FC = () => {
         id="VibePromoTightVO"
         component={VibePromoTight}
         durationInFrames={TIGHT_TOTAL_FRAMES}
+        fps={PROMO_FPS}
+        width={PROMO_WIDTH}
+        height={PROMO_HEIGHT}
+        defaultProps={{ voiceOver: true }}
+      />
+      <Composition
+        id="ConsoleComparison"
+        component={ConsoleComparison}
+        durationInFrames={CONSOLE_TOTAL_FRAMES}
+        fps={PROMO_FPS}
+        width={PROMO_WIDTH}
+        height={PROMO_HEIGHT}
+        defaultProps={{ voiceOver: false }}
+      />
+      <Composition
+        id="ConsoleComparisonVO"
+        component={ConsoleComparison}
+        durationInFrames={CONSOLE_TOTAL_FRAMES}
         fps={PROMO_FPS}
         width={PROMO_WIDTH}
         height={PROMO_HEIGHT}
