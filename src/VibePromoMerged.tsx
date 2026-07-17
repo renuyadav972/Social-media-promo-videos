@@ -45,7 +45,7 @@ const DUR = {
   brand: 110, // ~3.7s logo zoom-out, so the open doesn't feel rushed
   hook: 150, // fits the longer "idea to production" hook line
   intro: 100, // "Introducing Vibe Agent, by Plivo" title card
-  describe: 165, // prompt + Vibe Agent PLANS (no flow built yet)
+  describe: 170, // prompt + Vibe Agent PLANS (v3 VO is a touch longer)
   approve: 100, // Vibe Agent asks, you approve
   build: 145, // flow assembles on canvas while Vibe Agent posts build progress
   simulate: 105, // Flow tab: Vibe Agent writes the sim summary + "View simulations"
