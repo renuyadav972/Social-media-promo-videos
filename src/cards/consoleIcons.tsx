@@ -171,3 +171,20 @@ export const Ico: React.FC<{ name: IcoName; size?: number; stroke?: number }> = 
       );
   }
 };
+
+// A small, recognizable US flag (numbers in these videos are all +1 / US).
+export const USFlag: React.FC<{ w?: number }> = ({ w = 20 }) => {
+  const h = Math.round(w * 0.66);
+  return (
+    <svg width={w} height={h} viewBox="0 0 26 18" preserveAspectRatio="none" style={{ borderRadius: 2, display: "block", flexShrink: 0, boxShadow: "0 0 0 0.5px rgba(0,0,0,0.08)" }}>
+      <rect width="26" height="18" fill="#b22234" />
+      {[1.3, 3.9, 6.5, 9.1, 11.7, 14.3].map((y) => (
+        <rect key={y} x="0" y={y} width="26" height="1.3" fill="#ffffff" />
+      ))}
+      <rect width="11" height="9.7" fill="#3c3b6e" />
+      {[1.6, 3.9, 6.2, 8.5].map((cx) =>
+        [1.6, 4.2, 6.8].map((cy) => <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="0.5" fill="#ffffff" />),
+      )}
+    </svg>
+  );
+};

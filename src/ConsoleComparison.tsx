@@ -37,14 +37,15 @@ const PURPLE = "#cd3ef9";
 // ---- Beat layout (durations sized to each VO line) -----------------------
 const DUR = {
   brand: 135,
-  intro: 380,
-  build: 515,
-  deploy: 455,
-  monitor: 430,
-  settings: 665,
-  cta: 200,
+  intro: 500,
+  build: 1430,
+  deploy: 780,
+  monitor: 530,
+  buddy: 440,
+  settings: 660,
+  cta: 210,
 } as const;
-const ORDER = ["brand", "intro", "build", "deploy", "monitor", "settings", "cta"] as const;
+const ORDER = ["brand", "intro", "build", "deploy", "monitor", "buddy", "settings", "cta"] as const;
 const BEAT = (() => {
   const out = {} as Record<(typeof ORDER)[number], { from: number; dur: number }>;
   let acc = 0;
@@ -62,36 +63,50 @@ const VO: { src: string; from: number }[] = [
   { src: "vo/console-comparison/02-build.mp3", from: BEAT.build.from + 8 },
   { src: "vo/console-comparison/03-deploy.mp3", from: BEAT.deploy.from + 8 },
   { src: "vo/console-comparison/04-monitor.mp3", from: BEAT.monitor.from + 8 },
-  { src: "vo/console-comparison/05-settings.mp3", from: BEAT.settings.from + 8 },
-  { src: "vo/console-comparison/06-cta.mp3", from: BEAT.cta.from + 8 },
+  { src: "vo/console-comparison/05-buddy.mp3", from: BEAT.buddy.from + 8 },
+  { src: "vo/console-comparison/06-settings.mp3", from: BEAT.settings.from + 8 },
+  { src: "vo/console-comparison/07-cta.mp3", from: BEAT.cta.from + 8 },
 ];
 
 // Sub-screen switch offsets within a group beat (frames from beat start).
 const SUBAT = {
-  buildApps: 380,
-  deployWa: 220,
-  deployComp: 340,
+  buildSip: 340,
+  buildVerify: 670,
+  buildApps: 910,
+  buildEndpoints: 1180,
+  deployWaList: 310,
+  deployWaModal: 460,
+  deployComp: 550,
   monitorAnalytics: 250,
-  monitorAlerting: 340,
-  settingsIP: 220,
-  settingsGeo: 325,
-  settingsMsg: 430,
-  settingsBilling: 550,
+  monitorAlerting: 410,
+  settingsIP: 250,
+  settingsGeo: 355,
+  settingsMsg: 475,
+  settingsBilling: 580,
 } as const;
 
 // ---- Captions (per sub-screen; one purple keyword; no em-dashes) ---------
 const cap = (from: number, start: number, end: number, pre: string, keyword: string, post?: string): Caption => ({ start: from + start, end: from + end, pre, keyword, post });
 const CAPTIONS: Caption[] = [
   cap(BEAT.intro.from, 12, BEAT.intro.dur - 6, "Organized into ", "Build, Deploy, Monitor"),
-  cap(BEAT.build.from, 12, SUBAT.buildApps - 6, "Build: ", "create your agents"),
-  cap(BEAT.build.from, SUBAT.buildApps + 6, BEAT.build.dur - 6, "Trunking, apps and ", "endpoints"),
-  cap(BEAT.deploy.from, 12, SUBAT.deployWa - 6, "Deploy: ", "phone numbers"),
-  cap(BEAT.deploy.from, SUBAT.deployWa + 6, SUBAT.deployComp - 6, "Build ", "WhatsApp templates"),
+  // Build (5 items)
+  cap(BEAT.build.from, 12, SUBAT.buildSip - 6, "Build: ", "create AI agents"),
+  cap(BEAT.build.from, SUBAT.buildSip + 6, SUBAT.buildVerify - 6, "Inbound and outbound ", "SIP trunks"),
+  cap(BEAT.build.from, SUBAT.buildVerify + 6, SUBAT.buildApps - 6, "One time passcodes with ", "Verify"),
+  cap(BEAT.build.from, SUBAT.buildApps + 6, SUBAT.buildEndpoints - 6, "Wire numbers to your logic with ", "Applications"),
+  cap(BEAT.build.from, SUBAT.buildEndpoints + 6, BEAT.build.dur - 6, "SIP ", "Endpoints"),
+  // Deploy
+  cap(BEAT.deploy.from, 12, SUBAT.deployWaList - 6, "Deploy: ", "phone numbers"),
+  cap(BEAT.deploy.from, SUBAT.deployWaList + 6, SUBAT.deployComp - 6, "Sync and preview ", "WhatsApp templates"),
   cap(BEAT.deploy.from, SUBAT.deployComp + 6, BEAT.deploy.dur - 6, "10DLC and toll-free ", "compliance"),
+  // Monitor
   cap(BEAT.monitor.from, 12, SUBAT.monitorAnalytics - 6, "Monitor: ", "all your logs"),
   cap(BEAT.monitor.from, SUBAT.monitorAnalytics + 6, SUBAT.monitorAlerting - 6, "Performance ", "analytics"),
   cap(BEAT.monitor.from, SUBAT.monitorAlerting + 6, BEAT.monitor.dur - 6, "Proactive ", "alerting"),
-  cap(BEAT.settings.from, 12, SUBAT.settingsIP - 6, "Account settings under your ", "profile"),
+  // Ask Buddy
+  cap(BEAT.buddy.from, 12, BEAT.buddy.dur - 6, "Answers from your docs with ", "Ask Buddy"),
+  // Settings
+  cap(BEAT.settings.from, 12, SUBAT.settingsIP - 6, "Your account, under your ", "profile"),
   cap(BEAT.settings.from, SUBAT.settingsIP + 6, SUBAT.settingsGeo - 6, "Lock down with ", "IP whitelisting"),
   cap(BEAT.settings.from, SUBAT.settingsGeo + 6, SUBAT.settingsMsg - 6, "Reach control with ", "geo permissions"),
   cap(BEAT.settings.from, SUBAT.settingsMsg + 6, SUBAT.settingsBilling - 6, "Messaging and ", "voice settings"),
@@ -387,14 +402,24 @@ const WhatsAppScreen: React.FC = () => (
               <span style={{ padding: "4px 9px", color: SUB }}>Dark</span>
             </div>
           </div>
-          <div style={{ width: 220, height: 300, borderRadius: 22, border: "7px solid #1f2430", background: "#e5ddd5", overflow: "hidden", display: "flex", flexDirection: "column" }}>
-            <div style={{ height: 38, background: "#075e54", color: "#fff", display: "flex", alignItems: "center", gap: 8, padding: "0 12px", fontSize: 12, fontWeight: 600 }}>
-              <span style={{ width: 20, height: 20, borderRadius: "50%", background: "#ffffff33" }} />Business Name
+          <div style={{ width: 222, height: 320, borderRadius: 24, border: "8px solid #111827", background: "#e6ddd3", overflow: "hidden", display: "flex", flexDirection: "column", backgroundImage: "radial-gradient(rgba(0,0,0,0.035) 1px, transparent 1px)", backgroundSize: "14px 14px" }}>
+            {/* WhatsApp header */}
+            <div style={{ height: 42, background: "#128c7e", color: "#fff", display: "flex", alignItems: "center", gap: 8, padding: "0 10px", fontSize: 12, fontWeight: 600 }}>
+              <span style={{ fontSize: 15, opacity: 0.9 }}>‹</span>
+              <span style={{ width: 24, height: 24, borderRadius: "50%", background: "#ffffff44" }} />
+              <span style={{ flex: 1 }}>Business Name</span>
+              <span style={{ display: "flex", gap: 9, opacity: 0.92, fontSize: 12 }}><span>◉</span><span>☏</span><span>⋮</span></span>
             </div>
+            {/* empty chat area */}
             <div style={{ flex: 1 }} />
-            <div style={{ padding: "8px 10px", display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ flex: 1, height: 28, background: "#fff", borderRadius: 16, padding: "0 12px", display: "flex", alignItems: "center", fontSize: 11, color: "#9aa0ac" }}>Type a message</div>
-              <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#075e54" }} />
+            {/* input bar */}
+            <div style={{ padding: "7px 9px", display: "flex", alignItems: "center", gap: 7 }}>
+              <div style={{ flex: 1, height: 30, background: "#fff", borderRadius: 16, padding: "0 12px", display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#9aa0ac" }}>
+                <span style={{ color: "#b8bcc6" }}>☺</span>
+                <span style={{ flex: 1 }}>Type a message</span>
+                <span style={{ color: "#b8bcc6" }}>📎</span>
+              </div>
+              <div style={{ width: 30, height: 30, borderRadius: "50%", background: "#128c7e", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>➤</div>
             </div>
           </div>
         </div>
@@ -456,7 +481,7 @@ const mkLog = (i: number) => {
   return { date: `Jun 24, 2026 2:${mins < 10 ? "0" + mins : mins} PM`, from: "+1 347 324 5320", to: tos[i % tos.length], dir: i % 2 === 0 ? "Inbound" : "Outbound", cause: i % 5 === 0 ? "Busy" : "Normal Hangup", source: i % 2 ? "Callee" : "Caller", cost: "$0.0" + (160 + (i % 7) * 3) };
 };
 const LOGS = Array.from({ length: 11 }).map((_, i) => mkLog(i));
-const LogsPage: React.FC = () => (
+export const LogsPage: React.FC = () => (
   <div style={{ height: "100%", overflow: "hidden" }}>
     <PageHeader title="Logs" subtitle="Your call, message, WhatsApp, verify, and recording logs in one view" />
     <TabRow tabs={["Voice Logs", "Message Logs", "WhatsApp Logs", "Zentrunk Logs", "Verify Logs", "Recordings"]} active="Voice Logs" />
@@ -686,6 +711,185 @@ const MessagingSettingsPage: React.FC = () => (
   </div>
 );
 
+// ---- SIP Trunking (Zentrunk) ----
+const TRUNKS = [
+  ["voice-agent-out", "green", "Yes", "myagent.zt.plivo.com"],
+  ["support-dialer", "green", "No", "support.zt.plivo.com"],
+  ["sales-outbound", "green", "Yes", "sales.zt.plivo.com"],
+  ["reminders-bot", "grey", "No", "reminders.zt.plivo.com"],
+  ["collections-out", "green", "Yes", "collect.zt.plivo.com"],
+] as [string, "green" | "grey", string, string][];
+const SipTrunkingPage: React.FC = () => (
+  <div style={{ height: "100%", overflow: "hidden" }}>
+    <PageHeader title="SIP Trunking" subtitle="Carry voice traffic to and from your numbers with Zentrunk" action={<DarkButton><span style={{ display: "inline-flex", marginRight: 6 }}><Ico name="plus" size={14} /></span>Create Trunk</DarkButton>} />
+    <TabRow tabs={["Outbound Trunks", "Inbound Trunks"]} active="Outbound Trunks" />
+    <div style={{ padding: "16px 26px 0" }}>
+      <Table head={<><Th flex={1.3}>Trunk Name</Th><Th w={110}>Status</Th><Th w={110}>Secure</Th><Th flex={1.4}>Termination SIP Domain</Th></>}>
+        {TRUNKS.map((r, i) => (
+          <Row key={i} last={i === TRUNKS.length - 1}>
+            <div style={{ flex: 1.3, fontWeight: 500 }}>{r[0]}</div>
+            <div style={{ width: 110 }}><StatusPill tone={r[1]}>{r[1] === "green" ? "Active" : "Inactive"}</StatusPill></div>
+            <div style={{ width: 110, color: SUB }}>{r[2]}</div>
+            <div style={{ flex: 1.4, color: SUB, fontFamily: "ui-monospace, Menlo, monospace" }}>{r[3]}</div>
+          </Row>
+        ))}
+      </Table>
+    </div>
+  </div>
+);
+
+// ---- Verify ----
+const VERIFY = [
+  ["Signup OTP", "SMS, Voice", "6", "Jun 10, 2026"],
+  ["Login 2FA", "SMS, WhatsApp", "4", "May 22, 2026"],
+  ["Password Reset", "SMS", "6", "Apr 30, 2026"],
+  ["High-value Txn", "Voice, WhatsApp", "6", "Apr 02, 2026"],
+  ["Account Recovery", "SMS, Voice", "8", "Mar 18, 2026"],
+];
+const VerifyPage: React.FC = () => (
+  <div style={{ height: "100%", overflow: "hidden" }}>
+    <PageHeader title="Verify" subtitle="Send and check one time passcodes over SMS, voice, and WhatsApp" action={<DarkButton><span style={{ display: "inline-flex", marginRight: 6 }}><Ico name="plus" size={14} /></span>Create Application</DarkButton>} />
+    <div style={{ padding: "16px 26px 0" }}>
+      <Table head={<><Th flex={1.4}>Application Name</Th><Th flex={1.2}>Channels</Th><Th w={130}>Code Length</Th><Th w={170}>Created</Th></>}>
+        {VERIFY.map((r, i) => (
+          <Row key={i} last={i === VERIFY.length - 1}>
+            <div style={{ flex: 1.4, fontWeight: 500 }}>{r[0]}</div>
+            <div style={{ flex: 1.2, color: SUB }}>{r[1]}</div>
+            <div style={{ width: 130, color: SUB }}>{r[2]} digits</div>
+            <div style={{ width: 170, color: SUB }}>{r[3]}</div>
+          </Row>
+        ))}
+      </Table>
+    </div>
+  </div>
+);
+
+// ---- Endpoints ----
+const ENDPOINTS = [
+  ["1846...0291", "support-1", "support_1", "Default Endpoint App", "green"],
+  ["1846...0292", "support-2", "support_2", "Default Endpoint App", "green"],
+  ["1846...0293", "sales-1", "sales_1", "Direct Dial", "grey"],
+  ["1846...0294", "agent-wrtc-1", "agent_wrtc_1", "gibberlink-path-ivr", "green"],
+  ["1846...0295", "dialer-3", "dialer_3", "cc-collector", "grey"],
+] as [string, string, string, string, "green" | "grey"][];
+const EndpointsPage: React.FC = () => (
+  <div style={{ height: "100%", overflow: "hidden" }}>
+    <PageHeader title="Voice Endpoints" subtitle="Manage your SIP endpoints for softphones and browser-based calling" action={<DarkButton><span style={{ display: "inline-flex", marginRight: 6 }}><Ico name="plus" size={14} /></span>Create Endpoint</DarkButton>} />
+    <div style={{ padding: "16px 26px 0" }}>
+      <Table head={<><Th w={150}>Endpoint ID</Th><Th flex={1}>Alias</Th><Th flex={1}>Username</Th><Th flex={1.3}>Application</Th><Th w={140}>Status</Th></>}>
+        {ENDPOINTS.map((r, i) => (
+          <Row key={i} last={i === ENDPOINTS.length - 1}>
+            <div style={{ width: 150, fontFamily: "ui-monospace, Menlo, monospace", color: SUB }}>{r[0]}</div>
+            <div style={{ flex: 1, fontWeight: 500 }}>{r[1]}</div>
+            <div style={{ flex: 1, color: SUB, fontFamily: "ui-monospace, Menlo, monospace" }}>{r[2]}</div>
+            <div style={{ flex: 1.3, color: SUB }}>{r[3]}</div>
+            <div style={{ width: 140 }}><StatusPill tone={r[4]}>{r[4] === "green" ? "Registered" : "Not registered"}</StatusPill></div>
+          </Row>
+        ))}
+      </Table>
+    </div>
+  </div>
+);
+
+// ---- WhatsApp Configuration (templates list, matches the real screen) ----
+const WA_TPL = [
+  ["account_creation_confirmation_3", "red", "Utility", "English (US)", "Stella Salon"],
+  ["auto_pay_reminder_3", "green", "Utility", "English (US)", "Stella Salon"],
+  ["march_2026", "green", "Marketing", "English (US)", "Stella Salon"],
+  ["name_march", "green", "Marketing", "English", "Stella Salon"],
+  ["stella_new", "green", "Marketing", "English", "Stella Salon"],
+  ["welcome_offer", "green", "Marketing", "English (US)", "Zomato"],
+  ["order_shipped_v2", "green", "Utility", "English (US)", "Zomato"],
+  ["feedback_request", "red", "Marketing", "English", "Stella Salon"],
+] as [string, "green" | "red", string, string, string][];
+const WhatsAppConfigPage: React.FC = () => (
+  <div style={{ height: "100%", overflow: "hidden" }}>
+    <PageHeader title="WhatsApp Configuration" subtitle="Manage your WhatsApp profiles, numbers and templates" action={
+      <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ height: 38, display: "inline-flex", alignItems: "center", padding: "0 16px", borderRadius: 8, border: `1px solid ${HAIR}`, color: INK, fontSize: 14, fontWeight: 500 }}>Sync Templates</div>
+        <DarkButton><span style={{ display: "inline-flex", marginRight: 6 }}><Ico name="plus" size={14} /></span>Create Template</DarkButton>
+      </div>
+    } />
+    <TabRow tabs={["Numbers", "Templates"]} active="Templates" />
+    <div style={{ display: "flex", gap: 10, padding: "14px 26px 0" }}>
+      <Chip icon={<Ico name="search" size={14} />}>Search by name</Chip>
+      <Chip caret>Status</Chip><Chip caret>Category</Chip>
+    </div>
+    <div style={{ padding: "14px 26px 0" }}>
+      <Table head={<><Th flex={1.8}>Template Name</Th><Th w={120}>Status</Th><Th w={130}>Category</Th><Th w={140}>Language</Th><Th flex={1}>Business Account</Th></>}>
+        {WA_TPL.map((r, i) => (
+          <Row key={i} last={i === WA_TPL.length - 1}>
+            <div style={{ flex: 1.8, fontWeight: 500, fontFamily: "ui-monospace, Menlo, monospace", fontSize: 12.5 }}>{r[0]}</div>
+            <div style={{ width: 120 }}><StatusPill tone={r[1]}>{r[1] === "green" ? "APPROVED" : "REJECTED"}</StatusPill></div>
+            <div style={{ width: 130, color: SUB }}>{r[2]}</div>
+            <div style={{ width: 140, color: SUB }}>{r[3]}</div>
+            <div style={{ flex: 1, color: SUB }}>{r[4]}</div>
+          </Row>
+        ))}
+      </Table>
+      <Pager label="1-20 of 40" />
+    </div>
+  </div>
+);
+
+// ---- Ask Buddy (in-console AI assistant panel; matches the real Loom) ----
+const SearchedDocs: React.FC = () => (
+  <div style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#9aa0ac", fontSize: 11.5, marginBottom: 8 }}>
+    <span style={{ color: GREEN, display: "inline-flex" }}>
+      <svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 10.5 8.5 14 15 6" /></svg>
+    </span>
+    Searched docs
+  </div>
+);
+const AskBuddyScene: React.FC = () => (
+  <FadeIn>
+    <div style={{ position: "relative", height: "100%" }}>
+      <NewConsoleShell activeNav="Home"><HomePage /></NewConsoleShell>
+      {/* docked right panel */}
+      <div style={{ position: "absolute", top: 56, right: 0, bottom: 0, width: 372, background: "#fff", borderLeft: `1px solid ${HAIR}`, boxShadow: "-12px 0 30px rgba(20,18,40,0.06)", display: "flex", flexDirection: "column" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 9, padding: "15px 18px", borderBottom: `1px solid ${HAIR}` }}>
+          <span style={{ color: PURPLE, display: "inline-flex" }}><Ico name="sparkle" size={16} /></span>
+          <span style={{ fontSize: 14.5, fontWeight: 700, color: INK }}>Ask Buddy</span>
+          <span style={{ flex: 1 }} />
+          <span style={{ color: "#b8bcc6", fontSize: 13 }}>⟳</span>
+          <span style={{ color: "#b8bcc6", fontSize: 14 }}>✕</span>
+        </div>
+        <div style={{ flex: 1, padding: "16px 18px", overflow: "hidden" }}>
+          {/* user question (light grey, right) */}
+          <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 16 }}>
+            <div style={{ background: "#f1f1f4", color: INK, borderRadius: "12px 12px 3px 12px", padding: "9px 13px", fontSize: 12.5, maxWidth: 280 }}>How do I configure a phone number?</div>
+          </div>
+          {/* buddy answer (plain text + numbered steps + sources) */}
+          <SearchedDocs />
+          <div style={{ fontSize: 12.5, color: INK, lineHeight: 1.55, marginBottom: 10 }}>
+            You can configure a phone number from the Console under <b>Phone Numbers</b>. Once a number is in your account:
+          </div>
+          <div style={{ fontSize: 12.5, color: INK, lineHeight: 1.6, marginBottom: 10 }}>
+            <div>1. Open <b>Phone Numbers</b> and select the number.</div>
+            <div>2. Point it at an <b>Application</b>, which holds your answer and message URLs.</div>
+            <div>3. Save, and the number is live and ready to route calls and texts.</div>
+          </div>
+          <div style={{ fontSize: 12.5, color: INK, lineHeight: 1.55, marginBottom: 14 }}>
+            For ported numbers, use <b>Phone Numbers &gt; Port-in &gt; Configure</b> once the port completes.
+          </div>
+          <div style={{ fontSize: 11.5, color: "#9aa0ac", fontWeight: 600, marginBottom: 6 }}>Sources:</div>
+          {["numbers/configure-number.mdx:24-58", "numbers/number-porting.mdx:110-140"].map((s) => (
+            <div key={s} style={{ fontSize: 11.5, color: LINK, marginBottom: 5, display: "flex", alignItems: "center", gap: 7, fontFamily: "ui-monospace, Menlo, monospace" }}>
+              <span style={{ width: 5, height: 5, borderRadius: "50%", background: LINK, flexShrink: 0 }} />{s}
+            </div>
+          ))}
+        </div>
+        <div style={{ padding: "12px 16px", borderTop: `1px solid ${HAIR}` }}>
+          <div style={{ minHeight: 46, border: `1px solid ${HAIR}`, borderRadius: 10, display: "flex", alignItems: "center", padding: "0 14px", color: "#9aa0ac", fontSize: 13, justifyContent: "space-between" }}>
+            What would you like to know?
+            <span style={{ fontSize: 11, color: "#b8bcc6" }}>0 / 1000</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </FadeIn>
+);
+
 // ==========================================================================
 // Beat scenes
 // ==========================================================================
@@ -695,7 +899,10 @@ const BuildScene = () => (
   <FadeIn>
     <SubScreens screens={[
       { at: 0, node: <NewConsoleShell activeNav="Agents"><AgentsPage /></NewConsoleShell> },
+      { at: SUBAT.buildSip, node: <NewConsoleShell activeNav="SIP Trunking"><SipTrunkingPage /></NewConsoleShell> },
+      { at: SUBAT.buildVerify, node: <NewConsoleShell activeNav="Verify"><VerifyPage /></NewConsoleShell> },
       { at: SUBAT.buildApps, node: <NewConsoleShell activeNav="Applications"><ApplicationsPage /></NewConsoleShell> },
+      { at: SUBAT.buildEndpoints, node: <NewConsoleShell activeNav="Endpoints"><EndpointsPage /></NewConsoleShell> },
     ]} />
   </FadeIn>
 );
@@ -704,7 +911,8 @@ const DeployScene = () => (
   <FadeIn>
     <SubScreens screens={[
       { at: 0, node: <NewConsoleShell activeNav="Phone Numbers"><PhoneNumbersPage /></NewConsoleShell> },
-      { at: SUBAT.deployWa, node: <NewConsoleShell activeNav="WhatsApp"><WhatsAppScreen /></NewConsoleShell> },
+      { at: SUBAT.deployWaList, node: <NewConsoleShell activeNav="WhatsApp"><WhatsAppConfigPage /></NewConsoleShell> },
+      { at: SUBAT.deployWaModal, node: <NewConsoleShell activeNav="WhatsApp"><WhatsAppScreen /></NewConsoleShell> },
       { at: SUBAT.deployComp, node: <NewConsoleShell activeNav="Compliance"><CompliancePage /></NewConsoleShell> },
     ]} />
   </FadeIn>
@@ -721,13 +929,11 @@ const MonitorScene = () => (
 );
 
 const SettingsScene = () => {
-  const f = useCurrentFrame();
-  // Menu highlight steps with the VO (team, then two-factor / profile) before navigating.
-  const item = stepLabel(f, 90, SUBAT.settingsIP - 20, ["Team Setup", "Profile"]);
   return (
     <FadeIn>
       <SubScreens screens={[
-        { at: 0, node: <NewConsoleShell activeNav="Home" accountMenuOpen accountActiveItem={item}><HomePage /></NewConsoleShell> },
+        // VO: "manage your team and their roles" -> highlight Team Setup (no 2FA; it lives in Profile and is on by default).
+        { at: 0, node: <NewConsoleShell activeNav="Home" accountMenuOpen accountActiveItem="Team Setup"><HomePage /></NewConsoleShell> },
         { at: SUBAT.settingsIP, node: <NewConsoleShell activeNav="Home"><IPWhitelistingPage /></NewConsoleShell> },
         { at: SUBAT.settingsGeo, node: <NewConsoleShell activeNav="Home"><GeoPermissionsPage /></NewConsoleShell> },
         { at: SUBAT.settingsMsg, node: <NewConsoleShell activeNav="Home"><MessagingSettingsPage /></NewConsoleShell> },
@@ -788,6 +994,7 @@ export const ConsoleComparison: React.FC<{ voiceOver?: boolean }> = ({ voiceOver
       <Beat k="build" motion={M_STATIC}><BuildScene /></Beat>
       <Beat k="deploy" motion={M_STATIC}><DeployScene /></Beat>
       <Beat k="monitor" motion={M_STATIC}><MonitorScene /></Beat>
+      <Beat k="buddy" motion={M_STATIC}><AskBuddyScene /></Beat>
       <Beat k="settings" motion={M_STATIC}><SettingsScene /></Beat>
       <Beat k="cta"><CtaCard /></Beat>
       <TightCaptions captions={CAPTIONS} />

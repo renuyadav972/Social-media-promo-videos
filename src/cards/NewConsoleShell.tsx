@@ -1,7 +1,7 @@
 import React from "react";
 import { PlivoLogoSvg } from "../PlivoLogoSvg";
 import { SORA_FAMILY, INTER_FAMILY } from "../fonts";
-import { Ico } from "./consoleIcons";
+import { Ico, USFlag } from "./consoleIcons";
 
 // ============================================================================
 // NewConsoleShell — a code-controlled mock of the REDESIGNED Plivo console
@@ -228,6 +228,12 @@ export type NewConsoleShellProps = {
   // When set, the main sidebar collapses to an icon rail and this secondary
   // panel opens next to it (matches the real Analytics flyout).
   secondaryNav?: { title: string; items: string[]; active: string };
+  // Top-bar variant. "default" = the generic shell used by the other videos.
+  // "live" = matches the real console as captured in the call-scheduling footage
+  // (Enterprise Plan badge; Search ⌘K / Ask Buddy / theme toggle / avatar on the right).
+  topBar?: "default" | "live";
+  // "collapsed" = only the icon rail (the real console collapses the sidebar on the agent builder page).
+  rail?: "full" | "collapsed";
 };
 
 // All nav icons in order, for the collapsed icon rail.
@@ -328,7 +334,9 @@ export const NewConsoleShell: React.FC<NewConsoleShellProps> = ({
   accountActiveItem,
   accountBillingExpanded = false,
   dim = 0,
+  topBar = "default",
   secondaryNav,
+  rail = "full",
 }) => {
   return (
     <div
@@ -348,6 +356,8 @@ export const NewConsoleShell: React.FC<NewConsoleShellProps> = ({
           <CollapsedRail activeNav={activeNav} />
           <SecondaryPanel nav={secondaryNav} />
         </>
+      ) : rail === "collapsed" ? (
+        <CollapsedRail activeNav={activeNav} />
       ) : (
       /* ---- Left sidebar ---- */
       <div
@@ -379,16 +389,7 @@ export const NewConsoleShell: React.FC<NewConsoleShellProps> = ({
             color: INK,
           }}
         >
-          <span
-            style={{
-              width: 18,
-              height: 13,
-              borderRadius: 2,
-              background:
-                "linear-gradient(180deg,#b22234 0 33%,#fff 33% 66%,#3c3b6e 66% 100%)",
-              flexShrink: 0,
-            }}
-          />
+          <USFlag w={18} />
           <span style={{ fontWeight: 600 }}>plivo</span>
           <span style={{ flex: 1 }} />
           <span style={{ color: "#b8bcc6", fontSize: 11 }}>▾</span>
@@ -451,23 +452,43 @@ export const NewConsoleShell: React.FC<NewConsoleShellProps> = ({
               fontWeight: 500,
             }}
           >
-            Professional Plan
+            {topBar === "live" ? "Enterprise Plan" : "Professional Plan"}
           </div>
           <span style={{ flex: 1 }} />
-          <TopPill>
-            <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#16a34a" }} />
-            Available
-            <span style={{ color: "#b8bcc6", fontSize: 10 }}>▾</span>
-          </TopPill>
-          <TopPill muted>
-            <Ico name="headset" size={14} /> Human Specialist
-          </TopPill>
-          <TopPill>
-            <span style={{ color: PURPLE, display: "inline-flex" }}>
-              <Ico name="sparkle" size={14} />
-            </span>{" "}
-            Ask Buddy
-          </TopPill>
+          {topBar === "live" ? (
+            <>
+              <TopPill muted>
+                <Ico name="search" size={14} /> Search
+                <span style={{ fontSize: 11, color: "#b8bcc6", marginLeft: 2 }}>⌘ K</span>
+              </TopPill>
+              <TopPill>
+                <span style={{ color: PURPLE, display: "inline-flex" }}>
+                  <Ico name="sparkle" size={14} />
+                </span>{" "}
+                Ask Buddy
+              </TopPill>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={INK} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ margin: "0 4px" }}>
+                <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+              </svg>
+            </>
+          ) : (
+            <>
+              <TopPill>
+                <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#16a34a" }} />
+                Available
+                <span style={{ color: "#b8bcc6", fontSize: 10 }}>▾</span>
+              </TopPill>
+              <TopPill muted>
+                <Ico name="headset" size={14} /> Human Specialist
+              </TopPill>
+              <TopPill>
+                <span style={{ color: PURPLE, display: "inline-flex" }}>
+                  <Ico name="sparkle" size={14} />
+                </span>{" "}
+                Ask Buddy
+              </TopPill>
+            </>
+          )}
           <div
             style={{
               width: 34,

@@ -1,0 +1,190 @@
+import React from "react";
+import { AbsoluteFill, Audio, Sequence, staticFile, useCurrentFrame, interpolate, Easing } from "remotion";
+import { PlivoLogoSvg } from "./PlivoLogoSvg";
+import { MONO, SORA, INTER } from "./StyleFrames";
+import { XaiMark } from "./XaiAgent";
+import { PlListBeat, PlPlatformBeat, PlUriFilledBeat, PlLinkBeat, PlDoneBeat, XaAgentBeat, XaDeploymentBeat, XaNumberModalBeat, NUMBER } from "./cards/XaiBeats";
+import { VoiceAgentsPage, BuildModal } from "./cards/XaiKit";
+import { Phone, Wave } from "./Hooks";
+import { T, TB as TBW } from "./xaiNewsTimes";
+import { REAL_CALL_ENV } from "./xaiRealCallEnv";
+
+// ============================================================================
+// xAI launch video, THREE-STEP cut, long form (~3 min): intro as story beats on the words → three
+// steps, each a split (key points left, console right, floating lens on the part that matters) →
+// a real recorded call → closer. Music bed under everything. Timings come from xaiNewsTimes.ts,
+// generated from the narration's word times (scratchpad/mk_times.py), so a re-record is a re-run.
+// ============================================================================
+const S = 30; const BG = "#f9fafb"; const INK = "#0f1117"; const BLUE = "#323dfe"; const PURPLE = "#cd3ef9"; const GRAY = "#6b7280"; const LINE = "rgba(15,17,23,0.10)"; const GREEN = "#16a34a";
+const GRAD = "linear-gradient(90deg, #cd3ef9 0%, #323dfe 100%)"; const HAIR = "rgba(15,17,23,0.12)";
+const ease = (f: number, a: number, b: number) => interpolate(f, [a, b], [0, 1], { easing: Easing.inOut(Easing.cubic), extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+const pop = (f: number, at: number): React.CSSProperties => { const p = interpolate(f, [at, at + 16], [0, 1], { easing: Easing.out(Easing.cubic), extrapolateLeft: "clamp", extrapolateRight: "clamp" }); return { opacity: p, transform: `translateY(${(1 - p) * 20}px)` }; };
+const punch = (f: number, at: number): React.CSSProperties => { const p = interpolate(f, [at, at + 16], [0, 1], { easing: Easing.out(Easing.cubic), extrapolateLeft: "clamp", extrapolateRight: "clamp" }); return { opacity: p, transform: `translateY(${(1 - p) * 24}px)` }; };
+const Hi: React.FC<{ children: React.ReactNode }> = ({ children }) => <span style={{ color: BLUE }}>{children}</span>;
+const GCard: React.FC<{ style?: React.CSSProperties; dark?: boolean; children: React.ReactNode }> = ({ style, dark, children }) => <div style={{ borderRadius: 20, background: dark ? "#0b0b0d" : "#fff", border: `1px solid ${dark ? "rgba(255,255,255,0.10)" : HAIR}`, boxShadow: "0 20px 50px rgba(15,17,23,0.10)", ...style }}>{children}</div>;
+
+// ---- timeline -----------------------------------------------------------------------------------
+const TA = 16; const na = (t: number) => TA + Math.round(t * S);
+const T_S1 = na(T.step1 - 0.1); const T_S2 = na(T.step2 - 0.05); const T_S3 = na(T.step3 - 0.05);
+const CALL_LEN = Math.round(9.05 * S); const T_CALL = na(T.endA) + 24; const T_CALL_END = T_CALL + CALL_LEN + 20;
+const TB = T_CALL_END; const nb = (t: number) => TB + Math.round(t * S);
+export const XAI_NEWS_FRAMES = nb(TBW.endB) + 110;
+
+const Stage: React.FC<{ children?: React.ReactNode }> = ({ children }) => (
+  <AbsoluteFill style={{ background: BG, fontFamily: SORA, color: INK, overflow: "hidden" }}>
+    <div style={{ position: "absolute", top: 44, right: 72 }}><PlivoLogoSvg width={100} color={INK} /></div>
+    {children}
+  </AbsoluteFill>
+);
+type Ring = { at: number; x: number; y: number };
+const RingsIn: React.FC<{ f: number; rings: Ring[] }> = ({ f, rings }) => <>{rings.map((r, i) => { const tt = f - r.at; if (tt < -6 || tt > 40) return null; const rad = 18 + Math.max(0, tt) * 3.2; return <React.Fragment key={i}><div style={{ position: "absolute", left: r.x - rad, top: r.y - rad, width: rad * 2, height: rad * 2, borderRadius: "50%", border: `2.5px solid ${BLUE}`, opacity: Math.max(0, 0.9 - Math.max(0, tt) / 40) }} /><div style={{ position: "absolute", left: r.x - 7, top: r.y - 7, width: 14, height: 14, borderRadius: 7, background: BLUE, opacity: ease(f, r.at - 6, r.at) * (1 - Math.max(0, tt - 26) / 14) }} /></React.Fragment>; })}</>;
+// the console: one crop of the built screen per beat, scaled up to fill the stage; the camera eases
+// between crops (LiveKit's Screen model), so there is no small full screen with lenses popping over it.
+const FX = 620, FY = 200, FW = 1230, FH = Math.round(1080 * FW / 1920);
+type Rect = { x: number; y: number; w: number; h: number; at: number };
+const FULL: Rect = { x: 0, y: 0, w: 1920, h: 1080, at: 0 };
+const fit = (r: Rect) => { const Z = Math.min(FW / r.w, FH / r.h, 1.6); return { Z, w: r.w * Z, h: r.h * Z }; };
+const R = (x: number, y: number, at: number): Rect => ({ x, y, w: 960, h: 540, at });
+const camAt = (f: number, rects: Rect[]) => { const list = [FULL, ...rects].filter((r) => r.at <= f); const cur = list[list.length - 1]; const prev = list.length > 1 ? list[list.length - 2] : cur; const k = cur === prev || cur.at === 0 ? 1 : ease(f, cur.at, cur.at + 24); const L = (a: number, b: number) => a + (b - a) * k; const fp = fit(prev), fc = fit(cur); return { x: L(prev.x, cur.x), y: L(prev.y, cur.y), Z: L(fp.Z, fc.Z), w: L(fp.w, fc.w), h: L(fp.h, fc.h) }; };
+const Screen: React.FC<{ node: React.ReactNode; rects?: Rect[]; rings?: Ring[]; fade?: boolean }> = ({ node, rects = [], rings = [], fade = true }) => { const f = useCurrentFrame(); const e = fade ? ease(f, 0, 10) : 1; const c = camAt(f, rects); const left = FX + (FW - c.w) / 2, top = FY + (FH - c.h) / 2; return (
+  <div style={{ position: "absolute", left, top, width: c.w, height: c.h, borderRadius: 14, overflow: "hidden", background: "#fff", boxShadow: "0 30px 70px rgba(15,17,23,0.14)", border: `1px solid ${HAIR}`, opacity: e }}>
+    <div style={{ position: "absolute", left: -c.x * c.Z, top: -c.y * c.Z, width: 1920, height: 1080, transform: `scale(${c.Z})`, transformOrigin: "0 0" }}>{node}<RingsIn f={f} rings={rings} /></div>
+  </div>); };
+
+// ---- 1. intro: story beats cut to the words ------------------------------------------------------
+const PROMPT = "A support agent for a pottery studio. Take a message with the caller's name and callback number.";
+const Intro: React.FC = () => { const f = useCurrentFrame(); const t = (s: number) => na(s);
+  const hd = ease(f, t(T.heres), t(T.heres + 0.5)); const stamp = ease(f, t(T.launched), t(T.launched + 0.5));
+  const typed = Math.floor(ease(f, t(T.describe1), t(T.chat + 0.3)) * PROMPT.length); const sent = f >= t(T.grok2 - 0.2); const reply = "Writing Athena Pottery Support…"; const rn = Math.max(0, Math.min(reply.length, Math.floor((f - t(T.writes1)) * 1.3)));
+  const card = f >= t(T.writes1 + 0.5); const talk = f >= t(T.ready1); const pulse = ((f - t(T.ready1)) % 36) / 36; const phone = f >= t(T.but); const ringing = f >= t(T.answer); const shove = ease(f, t(T.but), t(T.but + 0.5));
+  const chatOut = ease(f, t(T.for1), t(T.for1 + 0.4)); const strip = f >= t(T.connects - 0.2); const stripE = ease(f, t(T.connects - 0.2), t(T.connects + 0.4)); const link = ease(f, t(T.sip1 - 0.4), t(T.sip1 + 0.6)); const plivoIn = ease(f, t(T.plivo1), t(T.plivo1 + 0.7));
+  return (
+  <Stage>
+    <div style={{ position: "absolute", left: 0, right: 0, top: 330 - hd * 250, display: "flex", justifyContent: "center", transform: `scale(${1 - hd * 0.55})`, transformOrigin: "50% 0%" }}>
+      <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 36 }}>
+        <div style={{ ...punch(f, t(0)) }}><XaiMark width={150} color={INK} /></div>
+        <div style={{ fontSize: 124, fontWeight: 700, letterSpacing: -5, lineHeight: 1, display: "flex", gap: 30 }}>{["Grok", "Voice", "Agent"].map((w, i) => <span key={w} style={{ display: "inline-block", color: i === 1 ? BLUE : INK, ...punch(f, t([T.grok1, T.voice1, T.agent1][i])) }}>{w}</span>)}</div>
+        <div style={{ position: "absolute", right: -60, top: -76, fontFamily: MONO, fontSize: 18, letterSpacing: 5, color: INK, background: "#fff", border: `1px solid ${HAIR}`, padding: "10px 18px", borderRadius: 8, opacity: stamp, transform: `rotate(-6deg) translateY(${(1 - stamp) * 10}px)` }}>NEW RELEASE</div>
+      </div>
+    </div>
+    {/* the chat: prompt types, Grok writes it, the agent is ready to talk */}
+    {f >= t(T.heres + 0.5) && chatOut < 1 ? <div style={{ position: "absolute", left: 420, top: 330, width: 1000, ...pop(f, t(T.heres + 0.5)), opacity: 1 - chatOut, transform: `translateX(${-shove * 350 - chatOut * 200}px)` }}><GCard><div style={{ padding: "26px 32px 28px", display: "flex", flexDirection: "column", gap: 18, fontFamily: INTER }}>
+      {!sent ? <div style={{ height: 64, borderRadius: 14, border: `1.5px solid ${LINE}`, display: "flex", alignItems: "center", padding: "0 20px", fontSize: 22, color: typed > 0 ? INK : GRAY }}>{typed > 0 ? <>{PROMPT.slice(0, typed)}<span style={{ opacity: Math.round(f / 6) % 2 }}>▍</span></> : "Describe your agent…"}<span style={{ marginLeft: "auto", width: 34, height: 34, borderRadius: 17, background: typed > 0 ? INK : "#e5e7eb", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>↑</span></div>
+      : <div style={{ display: "flex", justifyContent: "flex-end" }}><div style={{ maxWidth: 760, background: BLUE, color: "#fff", borderRadius: 18, padding: "14px 20px", fontSize: 22, lineHeight: 1.35 }}>{PROMPT}</div></div>}
+      {f >= t(T.writes1) ? <div style={{ display: "flex", justifyContent: "flex-start" }}><div style={{ background: "#0b0b0d", color: "#fff", borderRadius: 18, padding: "14px 20px", fontSize: 22, lineHeight: 1.35 }}>{reply.slice(0, rn)}{rn < reply.length ? <span style={{ opacity: Math.round(f / 6) % 2 }}>▍</span> : null}</div></div> : null}
+      {card ? <div style={{ display: "flex", alignItems: "center", gap: 18, padding: "16px 20px", borderRadius: 16, border: `1.5px solid ${LINE}`, ...punch(f, t(T.writes1 + 0.5)) }}><span style={{ width: 44, height: 44, borderRadius: 22, background: INK, display: "inline-flex", alignItems: "center", justifyContent: "center" }}><XaiMark width={20} color="#fff" /></span><div style={{ fontSize: 26, fontWeight: 600, fontFamily: SORA }}>Athena Pottery Support</div><span style={{ marginLeft: "auto", fontFamily: MONO, fontSize: 13, letterSpacing: 2, color: talk ? BLUE : GRAY }}>{talk ? "● READY" : "DRAFT"}</span><div style={{ marginLeft: 10, display: "flex", gap: 3, alignItems: "center", height: 28 }}>{Array.from({ length: 18 }, (_, i) => <span key={i} style={{ width: 3, height: talk ? 4 + 20 * Math.abs(Math.sin(i * 0.7 + f * 0.3)) : 4, borderRadius: 2, background: INK, opacity: talk ? 0.7 : 0.25 }} />)}</div></div> : null}
+    </div></GCard></div> : null}
+    {/* the phone: it arrives on "but there's one thing", rings on "answer a real phone call" */}
+    {phone ? <div style={{ position: "absolute", inset: 0, transform: "scale(0.62)", transformOrigin: "50% 50%" }}><Phone f={f} enterAt={t(T.but)} left={1180 + 349 * stripE}>
+      <div style={{ width: 120, height: 120, borderRadius: 60, background: "rgba(255,255,255,0.12)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 50 }}>☎</div>
+      <div style={{ marginTop: 30, fontSize: 30, fontWeight: 600 }}>{ringing ? "Incoming call" : "Phone"}</div>
+      <div style={{ marginTop: 10, fontFamily: MONO, fontSize: 30, letterSpacing: 1, opacity: ringing ? 1 : 0.35 }}>{NUMBER}</div>
+      <div style={{ marginTop: 180, display: "flex", gap: 60 }}><span style={{ width: 96, height: 96, borderRadius: 48, background: "rgba(255,255,255,0.12)", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 40 }}>✕</span><span style={{ width: 96, height: 96, borderRadius: 48, background: ringing ? "#fff" : "rgba(255,255,255,0.12)", color: ringing ? INK : "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 40 }}>☎</span></div>
+    </Phone></div> : null}
+    {/* the strip: agent — SIP trunking — the phone; Plivo grows into the pill on "that's where Plivo comes in" */}
+    {strip ? <>
+      <div style={{ position: "absolute", left: 210, top: 440, width: 400, ...pop(f, t(T.connects - 0.2)) }}><GCard dark><div style={{ height: 180, display: "flex", alignItems: "center", justifyContent: "center", gap: 18, color: "#fff" }}><XaiMark width={60} color="#fff" /><span style={{ fontSize: 28, fontWeight: 700 }}>Grok agent</span></div></GCard></div>
+      <div style={{ position: "absolute", left: 610, top: 529, width: Math.round(700 * link), height: 2, background: INK, opacity: 0.35 }} />
+      <div style={{ position: "absolute", left: 960 - 190, top: 530, width: 380, textAlign: "center", ...pop(f, t(T.sip1)) }}><div style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", background: "#fff", padding: "14px 26px", borderRadius: 18, boxShadow: "0 24px 60px rgba(15,17,23,0.14)", transform: "translateY(-50%)" }}><div style={{ height: Math.round(66 * plivoIn), overflow: "hidden", opacity: plivoIn, transform: `scale(${0.6 + 0.4 * plivoIn})`, transformOrigin: "50% 100%", display: "flex", alignItems: "flex-end", justifyContent: "center", paddingBottom: 6 }}><PlivoLogoSvg width={120} color={INK} /></div><span style={{ fontSize: 24, fontWeight: 700 }}><Hi>SIP Trunking</Hi></span></div></div>
+    </> : null}
+  </Stage>); };
+
+// ---- 2. a step: key points on the left, the console on the right ---------------------------------
+type Shot = { a: number; b: number; node: React.ReactNode; rings?: Ring[]; rects?: Rect[] };
+const Side: React.FC<{ n: string; side: string; title: React.ReactNode; points: [number, string][]; from: number; start: number }> = ({ n, side, title, points, from, start }) => { const f = useCurrentFrame() + from; return (
+  <div style={{ position: "absolute", left: 90, top: 200, width: 480 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 14, ...pop(f, 0) }}><span style={{ width: 44, height: 44, borderRadius: 22, background: INK, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontFamily: MONO, fontSize: 16 }}>{n}</span></div>
+    <div style={{ marginTop: 22, height: 64, display: "flex", alignItems: "center", ...pop(f, 4) }}>{side === "plivo" ? <PlivoLogoSvg width={150} color={INK} /> : <XaiMark width={60} color={INK} />}</div>
+    <div style={{ marginTop: 14, fontSize: 46, fontWeight: 700, letterSpacing: -1.8, lineHeight: 1.08, ...pop(f, 8) }}>{title}</div>
+    <div style={{ marginTop: 34, display: "flex", flexDirection: "column", gap: 18 }}>{points.map(([at, text]) => { const on = f + start >= na(at); return <div key={text} style={{ display: "flex", alignItems: "center", gap: 14, fontFamily: INTER, fontSize: 24, fontWeight: 500, color: INK, opacity: on ? 1 : 0, transform: `translateX(${on ? 0 : -12}px)` }}><span style={{ width: 14, height: 2, background: INK, opacity: 0.6, flexShrink: 0 }} />{text}</div>; })}</div>
+  </div>); };
+const ShotView: React.FC<{ s: Shot; first: boolean }> = ({ s, first }) => <Screen node={s.node} rects={s.rects} rings={s.rings} fade={first} />;
+const Step: React.FC<{ n: string; side: string; title: React.ReactNode; points: [number, string][]; shots: Shot[]; start: number }> = ({ n, side, title, points, shots, start }) => (
+  <Stage>
+    {shots.map((s, i) => <Sequence key={i} from={na(s.a) - start} durationInFrames={na(s.b) - na(s.a)} layout="none"><ShotView s={s} first={i === 0} /></Sequence>)}
+    {shots.map((s, i) => <Sequence key={"s" + i} from={na(s.a) - start} durationInFrames={na(s.b) - na(s.a)} layout="none"><Side n={n} side={side} title={title} points={points} from={na(s.a) - start} start={start} /></Sequence>)}
+  </Stage>);
+const fr = (a: number, b: number) => Math.round((b - a) * S); // frames between two anchor times
+
+// step 1 screens
+const B0 = T.describe2 - 0.3;
+const BuildScreen: React.FC = () => { const f = useCurrentFrame(); const t = (s: number) => na(s) - na(B0); const sent = f >= t(B0 + 0.2);
+  return <VoiceAgentsPage modal={<BuildModal chat={sent ? [{ at: t(B0 + 0.2), who: "you", text: PROMPT }, { at: t(T.grokw - 0.1), who: "thinking" }, { at: t(T.writes2), who: "bot", text: "Athena Pottery customer support agent that collects name and callback number. Writing it now." }] : []} typing={sent ? "" : PROMPT} typedFrom={t(T.describe2)} typedUntil={t(T.grokw - 0.45)} card cardAt={t(T.writes2 + 0.7)} />} />; };
+const HoverScreen: React.FC = () => { const f = useCurrentFrame(); return <VoiceAgentsPage hover={f >= fr(T.step1 - 0.1, T.open1 + 0.4) ? "Customer Support" : ""} />; };
+const STEP1: Shot[] = [
+  { a: T.step1 - 0.1, b: B0, node: <HoverScreen />, rects: [] },
+  { a: B0, b: T.add1 - 0.1, node: <BuildScreen />, rects: [{ x: 500, y: 120, w: 1060, h: 596, at: 0 }] },
+  { a: T.add1 - 0.1, b: T.step2 - 0.05, node: <XaAgentBeat voice />, rings: [{ at: fr(T.add1 - 0.1, T.welcome2), x: 600, y: 364 }, { at: fr(T.add1 - 0.1, T.publish), x: 1836, y: 106 }], rects: [R(260, 180, 0), R(960, 0, fr(T.add1 - 0.1, T.publish - 0.1))] },
+];
+// step 2 screens (the console flow as recorded on 2026-09-28: everything happens in the Create Trunk drawer)
+const L0 = T.step2 - 0.05, N0 = T.give3 - 0.15, P0 = T.then - 0.1, U0 = T.next - 0.1, K0 = T.finally - 0.1, D0 = T.from - 0.1;
+const STEP2: Shot[] = [
+  { a: L0, b: N0, node: <PlListBeat clickAt={fr(L0, T.create1)} />, rects: [R(0, 100, 0), R(960, 0, fr(L0, T.create1) - 60)] },
+  { a: N0, b: U0, node: <PlPlatformBeat openAt={fr(N0, T.then + 0.3)} hoverAt={fr(N0, T.choose1 - 0.1)} pickAt={fr(N0, T.choose1 + 0.35)} />, rects: [R(960, 60, 0)] },
+  { a: U0, b: K0, node: <PlUriFilledBeat filledAt={0} />, rings: [{ at: fr(U0, T.fills), x: 1300, y: 428 }], rects: [R(960, 60, 0)] },
+  { a: K0, b: D0, node: <PlLinkBeat openAt={fr(K0, T.link - 0.2)} pickAt={fr(K0, T.link + 0.6)} createAt={fr(K0, T.create2 + 0.2)} />, rings: [{ at: fr(K0, T.create2), x: 1818, y: 1028 }], rects: [R(960, 520, 0)] },
+  { a: D0, b: T.step3 - 0.05, node: <PlDoneBeat />, rects: [R(960, 40, 0), R(240, 100, 66)] },
+];
+// step 3 screens
+const E0 = T.step3 - 0.05, M0 = T.direct - 0.35, R0 = T.assigned - 0.15;
+const STEP3: Shot[] = [
+  { a: E0, b: M0, node: <XaDeploymentBeat />, rings: [{ at: fr(E0, T.add2), x: 1820, y: 240 }], rects: [R(960, 0, fr(E0, T.add2 - 1.2))] },
+  { a: M0, b: R0, node: <XaNumberModalBeat tabAt={fr(M0, T.direct)} nameFrom={9999} nameUntil={9999} numFrom={fr(M0, T.enter)} numUntil={fr(M0, T.enter + 1.0)} ipsFrom={fr(M0, T.add3)} />, rings: [{ at: fr(M0, T.direct) + 2, x: 974, y: 318 }, { at: fr(M0, T.save2) - 4, x: 1370, y: 890 }], rects: [{ x: 640, y: 200, w: 960, h: 750, at: 0 }] },
+  { a: R0, b: T.endA + 0.8, node: <XaDeploymentBeat rows toast /> },
+];
+
+// ---- 3. the call: real, recorded on Plivo --------------------------------------------------------
+const LINES: [number, number, "AGENT" | "YOU", string][] = [
+  [0.0, 1.9, "AGENT", "Hi, thanks for calling Athena Pottery! How can I help you today?"],
+  [3.24, 6.1, "YOU", "Hi there, yes. I'd like to book an appointment for a custom order."],
+  [6.92, 8.75, "AGENT", "I'd be happy to help you set that up."],
+];
+const Call: React.FC = () => { const f = useCurrentFrame(); const t = f / S; const secs = Math.floor(Math.max(0, t)); const cur = LINES.findIndex(([a, b]) => t >= a && t < b + 0.3); const lvl = REAL_CALL_ENV[f] ?? 0; const e = ease(f, 0, 10); return (
+  <Stage>
+    <div style={{ position: "absolute", left: 90, top: 200, width: 480, opacity: e }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12 }}><span style={{ width: 14, height: 14, borderRadius: 7, background: GREEN, boxShadow: "0 0 0 8px rgba(22,163,74,0.18)" }} /><span style={{ fontSize: 30, fontWeight: 700 }}>Connected</span><span style={{ marginLeft: "auto", fontFamily: MONO, fontSize: 26 }}>00:{String(secs).padStart(2, "0")}</span></div>
+      <div style={{ marginTop: 26 }}><GCard><div style={{ padding: "22px 24px", display: "flex", flexDirection: "column", gap: 14 }}><div style={{ fontFamily: MONO, fontSize: 24 }}>☎ {NUMBER}</div><div style={{ fontFamily: INTER, fontSize: 18, color: GRAY }}>a real phone, calling the Plivo number</div></div></GCard></div>
+      <div style={{ margin: "8px 0 8px 40px", width: 1, height: 46, background: HAIR }} />
+      <div style={{ display: "inline-flex", alignItems: "center", gap: 12, background: "#fff", padding: "10px 18px", borderRadius: 12, boxShadow: "0 16px 40px rgba(15,17,23,0.14)", marginLeft: 20 }}><PlivoLogoSvg width={80} color={INK} /><span style={{ fontSize: 18, fontWeight: 700 }}><Hi>SIP Trunking</Hi></span></div>
+      <div style={{ margin: "8px 0 8px 40px", width: 1, height: 46, background: HAIR }} />
+      <GCard dark><div style={{ padding: "22px 24px", display: "flex", alignItems: "center", gap: 16, color: "#fff" }}><XaiMark width={44} color="#fff" /><div><div style={{ fontSize: 22, fontWeight: 700 }}>Athena Pottery Support</div><div style={{ fontFamily: INTER, fontSize: 16, color: "rgba(255,255,255,0.6)" }}>xAI Grok voice agent</div></div></div></GCard>
+    </div>
+    <div style={{ position: "absolute", left: FX, top: FY, width: FW, height: FH, borderRadius: 16, background: "#fff", boxShadow: "0 30px 70px rgba(15,17,23,0.14)", border: `1px solid ${HAIR}`, opacity: e, padding: "60px 70px", boxSizing: "border-box", fontFamily: INTER }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+        {LINES.map(([a, b, w, txt], i) => { if (t < a - 0.1) return null; const on = i === cur; const n = Math.floor(Math.max(0, (t - a) / (b - a)) * txt.length); const me = w === "YOU"; return (
+          <div key={i} style={{ display: "flex", justifyContent: me ? "flex-end" : "flex-start", opacity: i < cur ? 0.6 : 1 }}>
+            <div style={{ maxWidth: 820, background: me ? "#f1f2f4" : "#0b0b0d", color: me ? INK : "#fff", borderRadius: 22, padding: "20px 26px", fontSize: 30, lineHeight: 1.35 }}>{txt.slice(0, n)}{on && n < txt.length ? <span style={{ opacity: Math.round(f / 6) % 2 }}>▍</span> : null}</div>
+          </div>); })}
+      </div>
+      <div style={{ position: "absolute", left: 70, bottom: 50, display: "flex", alignItems: "center", gap: 18 }}><span style={{ fontFamily: MONO, fontSize: 13, letterSpacing: 3, color: cur >= 0 && LINES[cur][2] === "YOU" ? GRAY : BLUE }}>{cur >= 0 ? (LINES[cur][2] === "YOU" ? "CALLER" : "GROK") : ""}</span><div style={{ display: "flex", gap: 4, alignItems: "center", height: 36 }}>{Array.from({ length: 40 }, (_, i) => <span key={i} style={{ width: 3, height: 4 + 26 * lvl * (0.4 + 0.6 * Math.abs(Math.sin(i * 0.8 + f * 0.3))), borderRadius: 2, background: INK, opacity: 0.7 }} />)}</div></div>
+      <div style={{ position: "absolute", right: 70, bottom: 56, fontFamily: MONO, fontSize: 13, letterSpacing: 3, color: GRAY }}>REAL CALL · RECORDED ON PLIVO</div>
+    </div>
+    <Audio src={staticFile("vo/xai2/call.mp3")} trimAfter={CALL_LEN} volume={(fr) => 1.15 * Math.min(1, (CALL_LEN - fr) / 12)} />
+  </Stage>); };
+
+// ---- 4. closer ------------------------------------------------------------------------------------
+const Closer: React.FC = () => { const f = useCurrentFrame(); const t = (s: number) => nb(s) - TB; return (
+  <Stage>
+    <div style={{ position: "absolute", left: 0, right: 0, top: 230, display: "flex", justifyContent: "center", alignItems: "center", gap: 40, ...pop(f, t(TBW.thats)) }}><XaiMark width={120} color={INK} /><span style={{ width: 120, height: 5, borderRadius: 3, backgroundImage: GRAD }} /><PlivoLogoSvg width={300} color={INK} /></div>
+    <div style={{ position: "absolute", left: 0, right: 0, top: 420, textAlign: "center", fontSize: 54, fontWeight: 600, letterSpacing: -1.8, color: GRAY, ...pop(f, t(TBW.real)) }}>on a real phone line.</div>
+    <div style={{ position: "absolute", left: 0, right: 0, top: 540, textAlign: "center", fontSize: 78, fontWeight: 700, letterSpacing: -2.8, lineHeight: 1.1 }}><div style={pop(f, t(TBW.builds))}>Grok builds the agent.</div><div style={pop(f, t(TBW.brings))}><Hi>Plivo brings the calls.</Hi></div></div>
+    <div style={{ position: "absolute", left: 0, right: 0, top: 800, textAlign: "center", ...pop(f, t(TBW.endB + 0.6)) }}><span style={{ display: "inline-block", background: INK, color: "#fff", fontFamily: INTER, fontWeight: 600, fontSize: 26, padding: "14px 32px", borderRadius: 999 }}>cx.plivo.com</span></div>
+  </Stage>); };
+
+// ---- music bed: calm loop under everything, ducked under the call, out over the last 2.5 s -------
+const MUSIC = 0.13;
+const musicVol = (f: number) => { const inn = Math.min(1, f / 30); const out = Math.min(1, Math.max(0, (XAI_NEWS_FRAMES - f) / 75)); const duck = f >= T_CALL && f < T_CALL_END ? 0.55 : 1; return MUSIC * inn * out * duck; };
+
+export const XaiNews: React.FC = () => (
+  <AbsoluteFill style={{ background: BG }}>
+    <Audio src={staticFile("cinno-loop.mp3")} loop volume={musicVol} />
+    <Sequence from={TA} layout="none"><Audio src={staticFile("vo/xai2/news13-a.mp3")} /></Sequence>
+    <Sequence from={TB} layout="none"><Audio src={staticFile("vo/xai2/news13-b.mp3")} /></Sequence>
+    <Sequence from={0} durationInFrames={T_S1} layout="none"><Intro /></Sequence>
+    <Sequence from={T_S1} durationInFrames={T_S2 - T_S1} layout="none"><Step n="01" side="xai" title={<>Build <Hi>the agent.</Hi></>} start={T_S1} shots={STEP1} points={[[T.open1, "Voice Agents → describe it"], [T.grokw, "Grok writes the agent"], [T.add1, "Welcome message + voice"], [T.publish, "Publish"]]} /></Sequence>
+    <Sequence from={T_S2} durationInFrames={T_S3 - T_S2} layout="none"><Step n="02" side="plivo" title={<>Create <Hi>the trunk.</Hi></>} start={T_S2} shots={STEP2} points={[[T.console, "SIP Trunking → Create Trunk"], [T.give3, "Name the trunk"], [T.choose1, "Platform: xAI · Inbound"], [T.primary, "Primary URI auto-filled"], [T.link, "Link your number"], [T.from, "Calls now travel to xAI"]]} /></Sequence>
+    <Sequence from={T_S3} durationInFrames={T_CALL - T_S3} layout="none"><Step n="03" side="xai" title={<>Number <Hi>→ agent.</Hi></>} start={T_S3} shots={STEP3} points={[[T.deployment - 0.2, "Deployment → Add number"], [T.direct, "Direct SIP"], [T.enter, "Enter the Plivo number"], [T.allowed, "Allowed addresses: Plivo IP ranges"], [T.assigned, "Number assigned"]]} /></Sequence>
+    <Sequence from={T_CALL} durationInFrames={T_CALL_END - T_CALL} layout="none"><Call /></Sequence>
+    <Sequence from={TB} durationInFrames={XAI_NEWS_FRAMES - TB} layout="none"><Closer /></Sequence>
+  </AbsoluteFill>
+);

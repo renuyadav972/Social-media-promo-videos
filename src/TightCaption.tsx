@@ -20,7 +20,7 @@ export type Caption = {
 
 const FADE = 6; // ~0.2s at 30fps
 
-const CaptionCard: React.FC<{ c: Caption; frame: number }> = ({ c, frame }) => {
+const CaptionCard: React.FC<{ c: Caption; frame: number; accent: string }> = ({ c, frame, accent }) => {
   if (frame < c.start || frame >= c.end) return null;
   const opacity = interpolate(
     frame,
@@ -61,19 +61,21 @@ const CaptionCard: React.FC<{ c: Caption; frame: number }> = ({ c, frame }) => {
         }}
       >
         {c.pre}
-        <span style={{ color: "#cd3ef9" }}>{c.keyword}</span>
+        <span style={{ color: accent }}>{c.keyword}</span>
         {c.post}
       </div>
     </div>
   );
 };
 
-export const TightCaptions: React.FC<{ captions: Caption[] }> = ({ captions }) => {
+// accent = keyword color. Defaults to the legacy purple so the older cuts are
+// unchanged; the split cuts pass brand blue to match their on-brand intro card.
+export const TightCaptions: React.FC<{ captions: Caption[]; accent?: string }> = ({ captions, accent = "#cd3ef9" }) => {
   const frame = useCurrentFrame();
   return (
     <AbsoluteFill style={{ pointerEvents: "none" }}>
       {captions.map((c, i) => (
-        <CaptionCard key={i} c={c} frame={frame} />
+        <CaptionCard key={i} c={c} frame={frame} accent={accent} />
       ))}
     </AbsoluteFill>
   );

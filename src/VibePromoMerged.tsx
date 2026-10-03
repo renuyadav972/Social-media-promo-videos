@@ -15,6 +15,7 @@ import { FinaleCard } from "./FinaleCard";
 import { TightStageClip } from "./TightStageClip";
 import { TightCaptions, type Caption } from "./TightCaption";
 import { IntroGlow } from "./IntroVariants";
+import { VibeIntroCard } from "./VibeIntroCard";
 import { MUSIC } from "./promoConfig";
 import type { Motion } from "./StageClip";
 import { PlivoAppShell } from "./cards/PlivoAppShell";
@@ -41,10 +42,8 @@ import {
 // ---- Beat layout ---------------------------------------------------------
 // Durations in frames; `from` is derived cumulatively so the brand bumper (or
 // any retime) auto-shifts everything downstream, and VO + captions follow.
-const DUR = {
-  brand: 110, // ~3.7s logo zoom-out, so the open doesn't feel rushed
-  hook: 150, // fits the longer "idea to production" hook line
-  intro: 100, // "Introducing Vibe Agent, by Plivo" title card
+// Shared beats (everything after the opening) — identical in both cuts.
+export const DUR_COMMON: Record<string, number> = {
   describe: 170, // prompt + Vibe Agent PLANS (v3 VO is a touch longer)
   approve: 100, // Vibe Agent asks, you approve
   build: 145, // flow assembles on canvas while Vibe Agent posts build progress
@@ -53,46 +52,112 @@ const DUR = {
   buddy: 120,
   publish: 120, // click Publish → agent goes live
   golive: 150, // connect a number; "...goes live. Yes. It's that simple."
-  cta: 90, // "Build yours today" — the close (no separate brand end card now)
-} as const;
-const ORDER = ["brand", "hook", "intro", "describe", "approve", "build", "simulate", "simscreen", "buddy", "publish", "golive", "cta"] as const;
-const BEAT = (() => {
-  const out = {} as Record<(typeof ORDER)[number], { from: number; dur: number }>;
+  cta: 90, // "Build yours today" — the close
+};
+export const COMMON_ORDER = ["describe", "approve", "build", "simulate", "simscreen", "buddy", "publish", "golive", "cta"];
+
+type BeatMap = Record<string, { from: number; dur: number }>;
+export const buildBeats = (introDur: Record<string, number>, order: string[]): { BEAT: BeatMap; total: number; order: string[] } => {
+  const BEAT: BeatMap = {};
   let acc = 0;
-  for (const k of ORDER) {
-    out[k] = { from: acc, dur: DUR[k] };
-    acc += DUR[k];
+  for (const k of order) {
+    const dur = introDur[k] ?? DUR_COMMON[k];
+    BEAT[k] = { from: acc, dur };
+    acc += dur;
   }
-  return out;
-})();
-export const MERGED_TOTAL_FRAMES = Object.values(DUR).reduce((a, b) => a + b, 0);
+  return { BEAT, total: acc, order };
+};
+
+// V1 = original opening (brand bumper → hook → "Introducing" gradient card).
+const LAYOUT_V1 = buildBeats({ brand: 110, hook: 150, intro: 100 }, ["brand", "hook", "intro", ...COMMON_ORDER]);
+// V2 = single cream topic-first title card (Pipecat intro format).
+const LAYOUT_V2 = buildBeats({ intro2: 190 }, ["intro2", ...COMMON_ORDER]);
+export const MERGED_TOTAL_FRAMES = LAYOUT_V1.total;
+export const MERGED_V2_TOTAL_FRAMES = LAYOUT_V2.total;
+
+// ---- Split cuts: two short videos carved out of the same beats -----------
+// Both keep the ORIGINAL merged video untouched; they just render a subset of
+// the beats with their own cream title card. Video 1 = build the agent (incl.
+// simulations + Ask Buddy as the "stuck? get help" moment). Video 2 = publish,
+// connect a phone number, and go live.
+// Video 1 = build the agent AND publish it (it's not live until it's
+// published). Video 2 = give the published agent a phone number: buy a
+// number → connect it to the workflow → make a test call. Title-card
+// durations are sized to fit each intro VO (buildintro 7.0s, goliveintro 7.7s).
+const BUILD_ORDER = ["coldopen", "buildtitle", "describe", "approve", "build", "simulate", "simscreen", "buddy", "publish", "cta"];
+const GOLIVE_ORDER = ["golivetitle", "buynumber", "connect", "testcall", "cta"];
+const LAYOUT_BUILD = buildBeats({ coldopen: 150, buildtitle: 190, buddy: 175, cta: 200 }, BUILD_ORDER);
+// Video 1's Buddy asks a build-time question (not "connect a number", which is
+// Video 2's topic), with a generic Buddy VO so audio matches on-screen text.
+const BUILD_BUDDY: BuddyContent = {
+  question: "How do I add a knowledge base?",
+  answer: (<>Open the <b>Knowledge Base</b> tab, upload your docs or add a URL, then <b>Save</b>. Your agent uses them to answer.</>),
+  source: "plivo.com/docs/voice-agents/knowledge-base",
+};
+const BUILD_VO_OVERRIDE = { buddy: "vo/merged/04-buddy-build.mp3", cta: "vo/merged/08-cta-build.mp3" };
+const LAYOUT_GOLIVE = buildBeats({ golivetitle: 265, buynumber: 185, connect: 175, testcall: 205 }, GOLIVE_ORDER);
+export const BUILD_TOTAL_FRAMES = LAYOUT_BUILD.total;
+export const GOLIVE_TOTAL_FRAMES = LAYOUT_GOLIVE.total;
 
 // ---- Voiceover clips (relative to /public), placed at absolute frames ----
-const VO: { src: string; from: number }[] = [
-  { src: "vo/merged/01-hook.mp3", from: BEAT.hook.from + 8 },
-  { src: "vo/merged/01b-intro.mp3", from: BEAT.intro.from + 12 },
-  { src: "vo/merged/02-describe.mp3", from: BEAT.describe.from + 6 },
-  { src: "vo/merged/03-approve.mp3", from: BEAT.approve.from + 10 },
-  { src: "vo/merged/03b-build.mp3", from: BEAT.build.from + 12 },
-  { src: "vo/merged/04-buddy.mp3", from: BEAT.buddy.from + 8 },
-  { src: "vo/merged/05-simulate.mp3", from: BEAT.simulate.from + 8 },
-  { src: "vo/merged/07-publish.mp3", from: BEAT.publish.from + 10 },
-  { src: "vo/merged/06-golive.mp3", from: BEAT.golive.from + 8 },
-  { src: "vo/merged/08-cta.mp3", from: BEAT.cta.from + 8 },
-];
+// One entry per beat; offset is frames after the beat starts. buildVO emits a
+// clip only for beats present in this cut, so any subset of beats works.
+export const VO_CONTENT: Record<string, { src: string; off: number }> = {
+  hook: { src: "vo/merged/01-hook.mp3", off: 8 },
+  intro: { src: "vo/merged/01b-intro.mp3", off: 12 },
+  intro2: { src: "vo/merged/00-introv2.mp3", off: 10 },
+  // Split cut 1 intro: agent line during the cold-open, then the narrator
+  // bridges (negative off so it starts during the cold-open pull-back).
+  coldopen: { src: "vo/merged/00-intro-agent.mp3", off: 30 },
+  buildtitle: { src: "vo/merged/00-intro-narrate.mp3", off: -25 },
+  golivetitle: { src: "vo/merged/00-goliveintro.mp3", off: 12 },
+  describe: { src: "vo/merged/02-describe.mp3", off: 6 },
+  approve: { src: "vo/merged/03-approve.mp3", off: 10 },
+  build: { src: "vo/merged/03b-build.mp3", off: 12 },
+  buddy: { src: "vo/merged/04-buddy.mp3", off: 8 },
+  simulate: { src: "vo/merged/05-simulate.mp3", off: 8 },
+  publish: { src: "vo/merged/07-publish.mp3", off: 10 },
+  golive: { src: "vo/merged/06-golive.mp3", off: 8 },
+  // Split-cut V2 body beats (buy → connect → test call).
+  buynumber: { src: "vo/merged/09-buynumber.mp3", off: 10 },
+  connect: { src: "vo/merged/10-connect.mp3", off: 8 },
+  testcall: { src: "vo/merged/11-testcall.mp3", off: 10 },
+  cta: { src: "vo/merged/08-cta.mp3", off: 8 },
+};
+export const buildVO = (BEAT: BeatMap, overrides: Record<string, string> = {}): { src: string; from: number }[] =>
+  Object.entries(VO_CONTENT)
+    .filter(([k]) => BEAT[k])
+    .map(([k, v]) => ({ src: overrides[k] ?? v.src, from: BEAT[k].from + v.off }));
 
 // ---- Captions (corner cards over the product beats) ----------------------
-// Order: describe → approve → build → simulate(flow) → simscreen → buddy → publish → golive.
-const CAPTIONS: Caption[] = [
-  { start: BEAT.describe.from + 4, end: BEAT.approve.from - 3, pre: "Describe it. ", keyword: "Vibe Agent", post: " plans the flow" },
-  { start: BEAT.approve.from + 3, end: BEAT.build.from - 3, pre: "Review. ", keyword: "Approve", post: "." },
-  { start: BEAT.build.from + 3, end: BEAT.simulate.from - 3, pre: "And it ", keyword: "builds itself", post: "." },
-  { start: BEAT.simulate.from + 3, end: BEAT.simscreen.from - 3, pre: "Pressure-tested for ", keyword: "the messiest callers", post: "" },
-  { start: BEAT.simscreen.from + 4, end: BEAT.buddy.from - 3, pre: "Every scenario, ", keyword: "achieved", post: "" },
-  { start: BEAT.buddy.from + 3, end: BEAT.publish.from - 3, pre: "Stuck? Just ask ", keyword: "Buddy", post: ", your copilot" },
-  { start: BEAT.publish.from + 3, end: BEAT.golive.from - 3, pre: "One click to ", keyword: "publish", post: "" },
-  { start: BEAT.golive.from + 3, end: BEAT.cta.from - 3, pre: "Connect a number. ", keyword: "Go live", post: "." },
-];
+// One entry per beat; a caption runs from its beat's start until the next beat
+// present in this cut starts. buildCaptions walks the actual order so subsets
+// (the split cuts) get correct end frames with no per-cut wiring.
+export const CAPTION_CONTENT: Record<string, { pre: string; keyword: string; post: string; startOff: number }> = {
+  describe: { pre: "Describe it. ", keyword: "Vibe Agent", post: " plans the flow", startOff: 4 },
+  approve: { pre: "Review. ", keyword: "Approve", post: ".", startOff: 3 },
+  build: { pre: "And it ", keyword: "builds itself", post: ".", startOff: 3 },
+  simulate: { pre: "Pressure-tested for ", keyword: "the messiest callers", post: "", startOff: 3 },
+  simscreen: { pre: "Every scenario, ", keyword: "achieved", post: "", startOff: 4 },
+  buddy: { pre: "Stuck? Just ask ", keyword: "Buddy", post: ", your copilot", startOff: 3 },
+  publish: { pre: "One click to ", keyword: "publish", post: ". It's live.", startOff: 3 },
+  golive: { pre: "Connect a number. ", keyword: "Go live", post: ".", startOff: 3 },
+  buynumber: { pre: "Phone Numbers. ", keyword: "Buy a number", post: ".", startOff: 3 },
+  connect: { pre: "Point it at ", keyword: "your workflow", post: ".", startOff: 3 },
+  testcall: { pre: "Then ", keyword: "make a test call", post: ".", startOff: 3 },
+};
+export const buildCaptions = (BEAT: BeatMap, order: string[]): Caption[] => {
+  const out: Caption[] = [];
+  for (let i = 0; i < order.length; i++) {
+    const name = order[i];
+    const c = CAPTION_CONTENT[name];
+    if (!c || !BEAT[name]) continue;
+    const next = order[i + 1];
+    const end = next && BEAT[next] ? BEAT[next].from - 3 : BEAT[name].from + BEAT[name].dur - 3;
+    out.push({ start: BEAT[name].from + c.startOff, end, pre: c.pre, keyword: c.keyword, post: c.post });
+  }
+  return out;
+};
 
 // ---- The agent flow tree (shared with the long cut's shape) --------------
 const FLOW_NODES: FlowNode[] = [
@@ -179,7 +244,7 @@ const CREAM_BG = "radial-gradient(120% 95% at 50% 0%, #fbfaf8 0%, #f6f5f3 55%, #
 const BRAND_LOGO_W = 430;
 const BRAND_P_OFFSET = -263.5 * (BRAND_LOGO_W / 720);
 const BRAND_START_SCALE = 4;
-const BrandBeat: React.FC = () => {
+export const BrandBeat: React.FC = () => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
   const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
@@ -206,7 +271,7 @@ const BrandBeat: React.FC = () => {
 };
 
 // ---- Beat 1 — Hook (cream title) -----------------------------------------
-const HookCard: React.FC = () => {
+export const HookCard: React.FC = () => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
   const clamp = { extrapolateLeft: "clamp", extrapolateRight: "clamp" } as const;
@@ -485,15 +550,23 @@ const BuddyAvatar: React.FC<{ size?: number }> = ({ size = 30 }) => (
     <circle cx="33" cy="30" r="2.3" fill="#fff" />
   </svg>
 );
-const BUDDY_Q = "How do I connect a phone number?";
-const AskBuddyCompact: React.FC = () => {
+// Buddy's on-screen Q&A is a prop so each cut can show a topic-appropriate
+// example (merged/build differ). Defaults keep the original merged content.
+export type BuddyContent = { question: string; answer: React.ReactNode; source: string };
+const BUDDY_DEFAULT: BuddyContent = {
+  question: "How do I connect a phone number?",
+  answer: (<>Open <b>Voice Configuration</b>, pick your number, choose the inbound trunk, then <b>Save</b>.</>),
+  source: "plivo.com/docs/voice-agents/routing",
+};
+const AskBuddyCompact: React.FC<{ content?: BuddyContent }> = ({ content = BUDDY_DEFAULT }) => {
   const frame = useCurrentFrame();
+  const q = content.question;
   const open = interpolate(frame, [12, 26], [0, 1], { easing: Easing.out(Easing.cubic), extrapolateLeft: "clamp", extrapolateRight: "clamp" });
   const typeStart = 18;
   const typeEnd = 46;
   const answerAt = 58;
-  const n = Math.floor(interpolate(frame, [typeStart, typeEnd], [0, BUDDY_Q.length], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }));
-  const typed = BUDDY_Q.slice(0, n);
+  const n = Math.floor(interpolate(frame, [typeStart, typeEnd], [0, q.length], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }));
+  const typed = q.slice(0, n);
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", color: "#0f1117", fontSize: 14, opacity: open, transform: `translateX(${(1 - open) * 40}px)` }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", borderBottom: "1px solid #eef0f4", fontWeight: 600 }}>
@@ -517,11 +590,11 @@ const AskBuddyCompact: React.FC = () => {
           <div style={{ display: "flex", gap: 10 }}>
             <BuddyAvatar size={22} />
             <div style={{ fontSize: 13.5, lineHeight: 1.5 }}>
-              Open <b>Voice Configuration</b>, pick your number, choose the inbound trunk, then <b>Save</b>.
+              {content.answer}
               {frame >= answerAt + 22 ? (
                 <>
                   <div style={{ fontSize: 13, fontWeight: 700, marginTop: 10, marginBottom: 4 }}>Sources:</div>
-                  <div style={{ color: "#2f6bff", textDecoration: "underline", fontSize: 12.5 }}>plivo.com/docs/voice-agents/routing</div>
+                  <div style={{ color: "#2f6bff", textDecoration: "underline", fontSize: 12.5 }}>{content.source}</div>
                 </>
               ) : null}
             </div>
@@ -531,7 +604,7 @@ const AskBuddyCompact: React.FC = () => {
     </div>
   );
 };
-const BuddyScene: React.FC = () => (
+const BuddyScene: React.FC<{ content?: BuddyContent }> = ({ content }) => (
   <>
   <PlivoAppShell
     agentName="General Help Desk Assistant"
@@ -543,7 +616,7 @@ const BuddyScene: React.FC = () => (
         <AgentFlowDiagram nodes={READY_NODES} edges={READY_EDGES} canvasHeight={600} />
       </div>
     }
-    chatPanel={<AskBuddyCompact />}
+    chatPanel={<AskBuddyCompact content={content} />}
   />
   {/* After the click opens the panel, spotlight Buddy and gray the flow out. */}
   <Spotlight left={1176} top={150} width={480} height={814} radius={0} appearAtFrame={30} />
@@ -822,18 +895,164 @@ const GoLiveScene: React.FC = () => (
   </>
 );
 
+// ---- Split V2 Beat — Buy a phone number (Phone Numbers section) -----------
+// Standalone console page (not the agent builder): search → results → Buy.
+const NumCaps: React.FC = () => (
+  <div style={{ display: "flex", gap: 6, color: "#6b7280", fontSize: 12 }}>
+    <span style={{ background: "#eef2ff", color: "#4f46e5", padding: "2px 8px", borderRadius: 6, fontWeight: 600 }}>Voice</span>
+    <span style={{ background: "#f0fdf4", color: "#059669", padding: "2px 8px", borderRadius: 6, fontWeight: 600 }}>SMS</span>
+  </div>
+);
+const NumberRow: React.FC<{ number: string; place: string; buy?: boolean }> = ({ number, place, buy }) => (
+  <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "16px 20px", borderTop: "1px solid #f1f2f4" }}>
+    <PhoneIcon />
+    <div style={{ minWidth: 210 }}>
+      <div style={{ fontSize: 17, fontWeight: 600, color: "#0f1117" }}>{number}</div>
+      <div style={{ fontSize: 12.5, color: "#9ca3af" }}>{place}</div>
+    </div>
+    <NumCaps />
+    <div style={{ marginLeft: "auto", fontSize: 14, color: "#6b7280" }}>$1.00<span style={{ color: "#9ca3af" }}>/mo</span></div>
+    <div style={{ position: "relative", background: buy ? "#0f1117" : "#fff", color: buy ? "#fff" : "#0f1117", border: buy ? "none" : "1px solid #e5e7eb", fontWeight: 600, fontSize: 14, padding: "9px 20px", borderRadius: 9 }}>
+      Buy
+      {buy ? <ClickCursor clickAtFrame={70} approach="tl" offset={{ x: 30, y: 14 }} sound={false} /> : null}
+    </div>
+  </div>
+);
+const Dropdown: React.FC<{ label: string; value: string }> = ({ label, value }) => (
+  <div>
+    <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", color: "#9ca3af", marginBottom: 6 }}>{label}</div>
+    <div style={{ display: "flex", alignItems: "center", gap: 10, border: "1px solid #e5e7eb", borderRadius: 9, padding: "10px 14px", fontSize: 14, fontWeight: 600, color: "#0f1117", minWidth: 150 }}>
+      {value}
+      <span style={{ marginLeft: "auto", color: "#9ca3af" }}>▾</span>
+    </div>
+  </div>
+);
+const BuyNumberScene: React.FC = () => {
+  const frame = useCurrentFrame();
+  return (
+    <AbsoluteFill style={{ background: "#f6f5f3", fontFamily: `${INTER_FAMILY}, sans-serif`, alignItems: "center", justifyContent: "center" }}>
+      <div style={{ width: 1180, background: "#fff", border: "1px solid #eef0f4", borderRadius: 18, boxShadow: "0 24px 60px rgba(15,17,23,0.08)", overflow: "hidden" }}>
+        <div style={{ padding: "26px 28px 20px" }}>
+          <div style={{ fontSize: 13, color: "#9ca3af", fontWeight: 600 }}>Phone Numbers</div>
+          <div style={{ fontSize: 26, fontWeight: 700, color: "#0f1117", marginTop: 4 }}>Buy a number</div>
+          <div style={{ fontSize: 14.5, color: "#6b7280", marginTop: 4 }}>Pick a number in the country you want to receive calls in.</div>
+          <div style={{ display: "flex", gap: 16, alignItems: "flex-end", marginTop: 22 }}>
+            <Dropdown label="Country" value="🇺🇸 United States" />
+            <Dropdown label="Type" value="Local" />
+            <Dropdown label="Capabilities" value="Voice" />
+            <div style={{ background: "#4f46e5", color: "#fff", fontWeight: 600, fontSize: 14, padding: "11px 22px", borderRadius: 9 }}>Search</div>
+          </div>
+        </div>
+        <div style={{ borderTop: "1px solid #eef0f4", background: "#fafbfc", padding: "10px 20px", fontSize: 12, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", color: "#9ca3af" }}>
+          3 numbers available
+        </div>
+        <NumberRow number="+1 (415) 555-0142" place="San Francisco, CA" buy />
+        <NumberRow number="+1 (415) 555-0177" place="San Francisco, CA" />
+        <NumberRow number="+1 (628) 555-0198" place="Oakland, CA" />
+      </div>
+      {frame >= 84 ? (
+        <div style={{ position: "absolute", top: 90, right: 90 }}>
+          <StatusToast title="Number purchased" body="+1 (415) 555-0142 is ready to connect to your agent." variant="success" appearAtFrame={84} chime />
+        </div>
+      ) : null}
+    </AbsoluteFill>
+  );
+};
+
+// ---- Split V2 Beat — Make a test call (in-console Test Call panel) --------
+const MicIcon: React.FC = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round"><rect x="9" y="3" width="6" height="12" rx="3" /><path d="M6 11a6 6 0 0 0 12 0M12 17v4" /></svg>
+);
+const KeypadIcon: React.FC = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="#6b7280"><circle cx="6" cy="6" r="1.6" /><circle cx="12" cy="6" r="1.6" /><circle cx="18" cy="6" r="1.6" /><circle cx="6" cy="12" r="1.6" /><circle cx="12" cy="12" r="1.6" /><circle cx="18" cy="12" r="1.6" /><circle cx="6" cy="18" r="1.6" /><circle cx="12" cy="18" r="1.6" /><circle cx="18" cy="18" r="1.6" /></svg>
+);
+const HangupIcon: React.FC = () => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><path d="M12 9c-2 0-3.9.3-5.6.9-.5.2-.9.7-.9 1.2v2.1c0 .5.3.9.8 1 .9.3 1.9.5 2.9.6.5 0 .9-.3.9-.8v-1.4c0-.4.3-.8.7-.9 .4-.1.8-.1 1.2-.1s.8 0 1.2.1c.4.1.7.5.7.9v1.4c0 .5.4.9.9.8 1-.1 2-.3 2.9-.6.5-.1.8-.5.8-1v-2.1c0-.5-.4-1-.9-1.2C15.9 9.3 14 9 12 9Z" transform="rotate(135 12 12)" /></svg>
+);
+const TestBubble: React.FC<{ who: "agent" | "caller"; text: string; at: number }> = ({ who, text, at }) => {
+  const frame = useCurrentFrame();
+  if (frame < at) return null;
+  const e = interpolate(frame, [at, at + 10], [0, 1], { easing: Easing.out(Easing.cubic), extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const agent = who === "agent";
+  return (
+    <div style={{ display: "flex", justifyContent: agent ? "flex-start" : "flex-end", opacity: e, transform: `translateY(${(1 - e) * 8}px)` }}>
+      <div style={{ maxWidth: 300, background: agent ? "#f3f4f6" : "#4f46e5", color: agent ? "#0f1117" : "#fff", borderRadius: 14, padding: "10px 14px", fontSize: 14, lineHeight: 1.45 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, opacity: 0.6, marginBottom: 3 }}>{agent ? "Agent" : "Caller"}</div>
+        {text}
+      </div>
+    </div>
+  );
+};
+const TestCallPanel: React.FC = () => {
+  const frame = useCurrentFrame();
+  const open = interpolate(frame, [10, 24], [0, 1], { easing: Easing.out(Easing.cubic), extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const secs = Math.max(0, Math.floor((frame - 24) / 30)) + 12; // call already in progress
+  const mm = String(Math.floor(secs / 60)).padStart(2, "0");
+  const ss = String(secs % 60).padStart(2, "0");
+  return (
+    <div style={{ position: "absolute", left: 150, top: 150, width: 470, background: "#fff", border: "1px solid #eef0f4", borderRadius: 14, boxShadow: "0 24px 60px rgba(15,17,23,0.14)", overflow: "hidden", opacity: open, transform: `translateX(${(1 - open) * -30}px)`, fontFamily: `${INTER_FAMILY}, sans-serif` }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 18px", borderBottom: "1px solid #eef0f4", fontWeight: 700, color: "#0f1117" }}>
+        <span>Test Call</span>
+        <span style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, fontWeight: 600, color: "#dc2626" }}>
+          <span style={{ width: 8, height: 8, borderRadius: 999, background: "#dc2626" }} /> Live
+        </span>
+      </div>
+      <div style={{ padding: "18px", display: "flex", flexDirection: "column", gap: 12, minHeight: 240 }}>
+        <TestBubble who="agent" text="Thanks for calling City Utility. How can I help you today?" at={30} />
+        <TestBubble who="caller" text="Hi, I need to reset my account PIN." at={78} />
+        <TestBubble who="agent" text="I can help with that. Can I get the phone number on the account?" at={128} />
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", borderTop: "1px solid #eef0f4", background: "#fafbfc" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <PhoneIcon />
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "#0f1117" }}>Test Call</div>
+            <div style={{ fontSize: 12.5, color: "#6b7280", fontVariantNumeric: "tabular-nums" }}>{mm}:{ss}</div>
+          </div>
+        </div>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 40, height: 40, borderRadius: 999, border: "1px solid #e5e7eb", display: "flex", alignItems: "center", justifyContent: "center" }}><MicIcon /></div>
+          <div style={{ width: 40, height: 40, borderRadius: 999, border: "1px solid #e5e7eb", display: "flex", alignItems: "center", justifyContent: "center" }}><KeypadIcon /></div>
+          <div style={{ width: 40, height: 40, borderRadius: 999, background: "#dc2626", display: "flex", alignItems: "center", justifyContent: "center" }}><HangupIcon /></div>
+        </div>
+      </div>
+    </div>
+  );
+};
+const TestCallScene: React.FC = () => (
+  <>
+    <PlivoAppShell
+      agentName="General Help Desk Assistant"
+      agentStatus="Published"
+      activeTab="Flow"
+      canvas={
+        <div style={{ padding: "24px 32px 0", width: "100%" }}>
+          <AgentFlowDiagram nodes={READY_NODES} edges={READY_EDGES} canvasHeight={600} />
+        </div>
+      }
+      overlay={<TestCallPanel />}
+    />
+    <Spotlight left={150} top={150} width={470} height={420} radius={14} appearAtFrame={20} />
+  </>
+);
+
 // ---- Beat 8 — CTA ---------------------------------------------------------
-const CtaCard: React.FC = () => {
+// waveform=true adds a gentle blue waveform above the headline, bookending the
+// voice cold-open so the split cut closes on the same motif it opened with.
+export const CtaCard: React.FC<{ accent?: string; waveform?: boolean }> = ({ accent = "#cd3ef9", waveform = false }) => {
   const frame = useCurrentFrame();
   const { durationInFrames } = useVideoConfig();
-  const enter = interpolate(frame, [4, 20], [0, 1], { easing: Easing.out(Easing.cubic), extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-  // Quick scale-in pop, then HOLD dead still — a continuous zoom shimmered the
+  const enter = interpolate(frame, [6, 28], [0, 1], { easing: Easing.out(Easing.cubic), extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const exit = interpolate(frame, [durationInFrames - 20, durationInFrames], [1, 0], { easing: Easing.in(Easing.cubic), extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  // Gentle scale-in, then HOLD dead still — a continuous zoom shimmered the
   // text/button ("shaky"), so the catch happens on entrance only.
-  const scale = interpolate(frame, [4, 22], [0.92, 1.0], {
+  const scale = interpolate(frame, [6, 30], [0.94, 1.0], {
     easing: Easing.out(Easing.cubic),
     extrapolateLeft: "clamp",
     extrapolateRight: "clamp",
   });
+  // Waveform breathes softly (it's a close, not a live call).
+  const wlevel = 0.42 + 0.14 * Math.sin(frame * 0.16);
   return (
     <AbsoluteFill
       style={{
@@ -843,9 +1062,14 @@ const CtaCard: React.FC = () => {
         fontFamily: `${SORA_FAMILY}, ${INTER_FAMILY}, sans-serif`,
       }}
     >
-      <div style={{ opacity: enter, transform: `scale(${scale})`, textAlign: "center" }}>
+      <div style={{ opacity: Math.min(enter, exit), transform: `scale(${scale})`, textAlign: "center" }}>
+        {waveform ? (
+          <div style={{ width: 360, margin: "0 auto 40px", opacity: 0.85 }}>
+            <ColdWaveform level={wlevel} />
+          </div>
+        ) : null}
         <div style={{ fontSize: 60, fontWeight: 600, color: "#0f1117", letterSpacing: -1.4 }}>
-          Build <span style={{ color: "#cd3ef9" }}>yours</span> today
+          Build <span style={{ color: accent }}>yours</span> today
         </div>
         <div
           style={{
@@ -879,7 +1103,7 @@ const CtaCard: React.FC = () => {
 // framings (wide, then tight) and CROSSFADE between them. Each layer is a
 // constant transform (no per-frame scaling = steady), and the dissolve replaces
 // both the shimmery continuous zoom and the jarring hard cut.
-const CrossfadeZoom: React.FC<{ wide: Motion; tight: Motion; atFrame: number; durFrames?: number; children: React.ReactNode }> = ({ wide, tight, atFrame, durFrames = 18, children }) => {
+export const CrossfadeZoom: React.FC<{ wide: Motion; tight: Motion; atFrame: number; durFrames?: number; children: React.ReactNode }> = ({ wide, tight, atFrame, durFrames = 18, children }) => {
   const frame = useCurrentFrame();
   const tightOpacity = interpolate(frame, [atFrame, atFrame + durFrames], [0, 1], {
     easing: Easing.inOut(Easing.cubic),
@@ -907,80 +1131,206 @@ const M_SIMULATE: Motion = { keyframes: [{ at: 0.0, x: 0.806, y: 0.58, scale: 1.
 const M_SIMSCREEN: Motion = { keyframes: [{ at: 0.0, x: 0.327, y: 0.46, scale: 1.55 }] };
 const M_PUBLISH: Motion = { keyframes: [{ at: 0.0, x: 0.72, y: 0.26, scale: 1.34 }] };
 const M_GOLIVE: Motion = { keyframes: [{ at: 0.0, x: 0.5, y: 0.58, scale: 1.58 }] };
+const M_BUYNUMBER: Motion = { keyframes: [{ at: 0.0, x: 0.5, y: 0.5, scale: 1.04 }] };
+const M_TESTCALL: Motion = { keyframes: [{ at: 0.0, x: 0.34, y: 0.5, scale: 1.12 }] };
 
-const musicVolumeAtFrame = (frame: number) => {
+export const musicVolumeAtFrame = (frame: number, total: number) => {
   const fade = MUSIC.fadeFrames;
   if (frame < fade) return (frame / fade) * MUSIC.bedVolume;
-  const out = MERGED_TOTAL_FRAMES - fade;
-  if (frame > out) return ((MERGED_TOTAL_FRAMES - frame) / fade) * MUSIC.bedVolume;
+  const out = total - fade;
+  if (frame > out) return ((total - frame) / fade) * MUSIC.bedVolume;
   return MUSIC.bedVolume;
 };
 
-export const VibePromoMerged: React.FC<{ voiceOver?: boolean }> = ({ voiceOver = false }) => {
+// ---- Split cut 1 — Voice cold-open ---------------------------------------
+// Opens ON the thing you're building: dark screen, an incoming call buzzes in,
+// a live blue waveform pulses as the agent answers, then the scene lightens and
+// pulls back to hand off to the cream title card. Dark-to-cream = the "reveal".
+const CREAM_WASH = "radial-gradient(120% 95% at 50% 0%, #fbfaf8 0%, #f6f5f3 55%, #efeeea 100%)";
+const ColdPhoneGlyph: React.FC<{ color: string }> = ({ color }) => (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M6.5 3.5 4 4.5C3 5 2.6 6 2.9 7A15 15 0 0 0 17 21c1 .3 2-.1 2.5-1.1l1-2.5-4-1.8-1.4 1.6A11 11 0 0 1 8.8 10l1.6-1.4z" />
+  </svg>
+);
+// level 0..1 scales the amplitude, so the waveform can ramp up as the agent
+// starts speaking and wind down gently as the line finishes (natural settle).
+const ColdWaveform: React.FC<{ level: number }> = ({ level }) => {
+  const frame = useCurrentFrame();
+  const bars = 42;
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 5, height: 96 }}>
+      {Array.from({ length: bars }).map((_, i) => {
+        const wobble = 0.5 + 0.5 * Math.sin(i * 0.55);
+        const amp = 5 + 42 * wobble * level;
+        const h = 6 + Math.abs(Math.sin(frame * 0.4 + i * 0.7)) * amp;
+        return <div key={i} style={{ width: 5, height: h, borderRadius: 3, background: "#323dfe", opacity: 0.9 }} />;
+      })}
+    </div>
+  );
+};
+const AGENT_LINE = "Thanks for calling! How can I help you today?";
+const BuildColdOpen: React.FC = () => {
+  const frame = useCurrentFrame();
+  const enter = interpolate(frame, [0, 12], [0, 1], { easing: Easing.out(Easing.cubic), extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const buzz = frame < 30 ? Math.sin(frame * 1.5) * (1 - frame / 30) * 5 : 0;
+  // Agent speaks ~30-105; then a natural beat as the waveform settles + the
+  // scene pulls back and lightens, and the narrator comes in (~125).
+  const pull = interpolate(frame, [118, 150], [1, 0.82], { easing: Easing.inOut(Easing.cubic), extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const fadeOut = interpolate(frame, [134, 150], [1, 0], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const cream = interpolate(frame, [120, 150], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const level = interpolate(frame, [30, 38, 106, 126], [0, 1, 1, 0.12], { easing: Easing.inOut(Easing.cubic), extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  const speaking = frame >= 30 && frame <= 106;
+  const nChars = Math.floor(interpolate(frame, [36, 100], [0, AGENT_LINE.length], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }));
+  const ringPulse = 0.5 + 0.5 * Math.sin(frame * 0.5);
+  const reveal = interpolate(frame, [92, 112], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
+  return (
+    <AbsoluteFill style={{ background: "#0d0f14", fontFamily: `${INTER_FAMILY}, sans-serif` }}>
+      <AbsoluteFill style={{ background: CREAM_WASH, opacity: cream }} />
+      <AbsoluteFill style={{ alignItems: "center", justifyContent: "center", opacity: Math.min(enter, fadeOut) }}>
+        <div style={{ transform: `translateX(${buzz}px) scale(${pull})`, width: 760, background: "rgba(22,25,33,0.96)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 22, padding: "34px 40px", boxShadow: "0 40px 120px rgba(0,0,0,0.5)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, color: "#e7e9ee" }}>
+            <span style={{ width: 12, height: 12, borderRadius: 999, background: "#22c55e", opacity: 0.4 + 0.6 * ringPulse, boxShadow: `0 0 ${8 + 10 * ringPulse}px #22c55e` }} />
+            <span style={{ fontSize: 17, fontWeight: 600, letterSpacing: 0.3 }}>Incoming call</span>
+            <span style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, color: "#8b90a0", fontSize: 14 }}>
+              <ColdPhoneGlyph color="#8b90a0" /> +1 (415) 555-0142
+            </span>
+          </div>
+          <div style={{ margin: "30px 0 26px" }}>
+            <ColdWaveform level={level} />
+          </div>
+          <div style={{ minHeight: 58, display: "flex", gap: 12, alignItems: "flex-start" }}>
+            <span style={{ width: 30, height: 30, borderRadius: 999, background: "#323dfe", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, fontSize: 15 }}>🤖</span>
+            <div style={{ color: "#f4f5f7", fontSize: 21, lineHeight: 1.4, fontWeight: 500 }}>
+              {AGENT_LINE.slice(0, nChars)}
+              {speaking && nChars < AGENT_LINE.length ? <span style={{ opacity: 0.5 }}>▍</span> : null}
+            </div>
+          </div>
+          <div style={{ marginTop: 24, paddingTop: 18, borderTop: "1px solid rgba(255,255,255,0.07)", display: "flex", alignItems: "center", gap: 10, opacity: reveal }}>
+            <PlivoLogoSvg width={78} color="#ffffff" />
+            <span style={{ color: "#8b90a0", fontSize: 14 }}>Voice AI agent</span>
+            <span style={{ marginLeft: "auto", color: "#22c55e", fontSize: 13, fontWeight: 600 }}>● Live</span>
+          </div>
+        </div>
+      </AbsoluteFill>
+    </AbsoluteFill>
+  );
+};
+
+// ---- Shared timeline ------------------------------------------------------
+// Renders whatever beats are present in BEAT, guarded so any subset (the full
+// merged cut OR either split cut) renders from the same code. `opening` is the
+// intro the caller wants (brand bumper trio, single cream card, etc.).
+const PromoTimeline: React.FC<{
+  BEAT: BeatMap;
+  total: number;
+  voiceOver: boolean;
+  opening: React.ReactNode;
+  // Per-cut overrides (the split cuts customise Buddy; merged passes neither).
+  buddyContent?: BuddyContent;
+  voOverride?: Record<string, string>;
+  // Caption/CTA keyword color. Merged keeps legacy purple; split cuts pass
+  // brand blue so the captions match their on-brand blue intro card.
+  accent?: string;
+  // Adds the closing waveform bookend on the CTA (split cut 1).
+  ctaWaveform?: boolean;
+}> = ({ BEAT, total, voiceOver, opening, buddyContent, voOverride, accent = "#cd3ef9", ctaWaveform }) => {
+  const VO = buildVO(BEAT, voOverride);
+  const CAPTIONS = buildCaptions(BEAT, Object.keys(BEAT));
   return (
     <AbsoluteFill style={{ backgroundColor: "#f6f5f3" }}>
       {/* VO cut uses the original calm bed (cinno-loop) the user prefers; the
           music-only cut uses the preppier Vimeo track since there's no VO. */}
       <Audio
         src={staticFile(voiceOver ? MUSIC.src : "vibe-music.mp3")}
-        volume={voiceOver ? (f) => musicVolumeAtFrame(f) * 0.3 : (f) => musicVolumeAtFrame(f) * 0.4}
+        volume={voiceOver ? (f) => musicVolumeAtFrame(f, total) * 0.3 : (f) => musicVolumeAtFrame(f, total) * 0.4}
       />
 
-      <Sequence from={BEAT.brand.from} durationInFrames={BEAT.brand.dur} layout="none">
-        <BrandBeat />
-      </Sequence>
-      <Sequence from={BEAT.hook.from} durationInFrames={BEAT.hook.dur} layout="none">
-        <HookCard />
-      </Sequence>
-      <Sequence from={BEAT.intro.from} durationInFrames={BEAT.intro.dur} layout="none">
-        <IntroGlow />
-      </Sequence>
-      <Sequence from={BEAT.describe.from} durationInFrames={BEAT.describe.dur} layout="none">
-        <CrossfadeZoom wide={M_DESCRIBE_WIDE} tight={M_DESCRIBE_TIGHT} atFrame={42}>
-          <DescribeScene />
-        </CrossfadeZoom>
-      </Sequence>
-      <Sequence from={BEAT.approve.from} durationInFrames={BEAT.approve.dur} layout="none">
-        <TightStageClip motion={M_APPROVE}>
-          <ApproveScene />
-        </TightStageClip>
-      </Sequence>
-      <Sequence from={BEAT.build.from} durationInFrames={BEAT.build.dur} layout="none">
-        <TightStageClip motion={M_BUILD}>
-          <BuildScene />
-        </TightStageClip>
-      </Sequence>
-      <Sequence from={BEAT.buddy.from} durationInFrames={BEAT.buddy.dur} layout="none">
-        <CrossfadeZoom wide={M_BUDDY_WIDE} tight={M_BUDDY_TIGHT} atFrame={44}>
-          <BuddyScene />
-        </CrossfadeZoom>
-      </Sequence>
-      <Sequence from={BEAT.simulate.from} durationInFrames={BEAT.simulate.dur} layout="none">
-        <TightStageClip motion={M_SIMULATE}>
-          <SimulationScene />
-        </TightStageClip>
-      </Sequence>
-      <Sequence from={BEAT.simscreen.from} durationInFrames={BEAT.simscreen.dur} layout="none">
-        <TightStageClip motion={M_SIMSCREEN}>
-          <SimScreenScene />
-        </TightStageClip>
-      </Sequence>
-      <Sequence from={BEAT.publish.from} durationInFrames={BEAT.publish.dur} layout="none">
-        <TightStageClip motion={M_PUBLISH}>
-          <PublishScene />
-        </TightStageClip>
-      </Sequence>
-      <Sequence from={BEAT.golive.from} durationInFrames={BEAT.golive.dur} layout="none">
-        <TightStageClip motion={M_GOLIVE}>
-          <GoLiveScene />
-        </TightStageClip>
-      </Sequence>
-      <Sequence from={BEAT.cta.from} durationInFrames={BEAT.cta.dur} layout="none">
-        <CtaCard />
-      </Sequence>
+      {opening}
+      {BEAT.describe && (
+        <Sequence from={BEAT.describe.from} durationInFrames={BEAT.describe.dur} layout="none">
+          <CrossfadeZoom wide={M_DESCRIBE_WIDE} tight={M_DESCRIBE_TIGHT} atFrame={42}>
+            <DescribeScene />
+          </CrossfadeZoom>
+        </Sequence>
+      )}
+      {BEAT.approve && (
+        <Sequence from={BEAT.approve.from} durationInFrames={BEAT.approve.dur} layout="none">
+          <TightStageClip motion={M_APPROVE}>
+            <ApproveScene />
+          </TightStageClip>
+        </Sequence>
+      )}
+      {BEAT.build && (
+        <Sequence from={BEAT.build.from} durationInFrames={BEAT.build.dur} layout="none">
+          <TightStageClip motion={M_BUILD}>
+            <BuildScene />
+          </TightStageClip>
+        </Sequence>
+      )}
+      {BEAT.buddy && (
+        <Sequence from={BEAT.buddy.from} durationInFrames={BEAT.buddy.dur} layout="none">
+          <CrossfadeZoom wide={M_BUDDY_WIDE} tight={M_BUDDY_TIGHT} atFrame={44}>
+            <BuddyScene content={buddyContent} />
+          </CrossfadeZoom>
+        </Sequence>
+      )}
+      {BEAT.simulate && (
+        <Sequence from={BEAT.simulate.from} durationInFrames={BEAT.simulate.dur} layout="none">
+          <TightStageClip motion={M_SIMULATE}>
+            <SimulationScene />
+          </TightStageClip>
+        </Sequence>
+      )}
+      {BEAT.simscreen && (
+        <Sequence from={BEAT.simscreen.from} durationInFrames={BEAT.simscreen.dur} layout="none">
+          <TightStageClip motion={M_SIMSCREEN}>
+            <SimScreenScene />
+          </TightStageClip>
+        </Sequence>
+      )}
+      {BEAT.publish && (
+        <Sequence from={BEAT.publish.from} durationInFrames={BEAT.publish.dur} layout="none">
+          <TightStageClip motion={M_PUBLISH}>
+            <PublishScene />
+          </TightStageClip>
+        </Sequence>
+      )}
+      {BEAT.golive && (
+        <Sequence from={BEAT.golive.from} durationInFrames={BEAT.golive.dur} layout="none">
+          <TightStageClip motion={M_GOLIVE}>
+            <GoLiveScene />
+          </TightStageClip>
+        </Sequence>
+      )}
+      {BEAT.buynumber && (
+        <Sequence from={BEAT.buynumber.from} durationInFrames={BEAT.buynumber.dur} layout="none">
+          <TightStageClip motion={M_BUYNUMBER}>
+            <BuyNumberScene />
+          </TightStageClip>
+        </Sequence>
+      )}
+      {BEAT.connect && (
+        <Sequence from={BEAT.connect.from} durationInFrames={BEAT.connect.dur} layout="none">
+          <TightStageClip motion={M_GOLIVE}>
+            <GoLiveScene />
+          </TightStageClip>
+        </Sequence>
+      )}
+      {BEAT.testcall && (
+        <Sequence from={BEAT.testcall.from} durationInFrames={BEAT.testcall.dur} layout="none">
+          <TightStageClip motion={M_TESTCALL}>
+            <TestCallScene />
+          </TightStageClip>
+        </Sequence>
+      )}
+      {BEAT.cta && (
+        <Sequence from={BEAT.cta.from} durationInFrames={BEAT.cta.dur} layout="none">
+          <CtaCard accent={accent} waveform={ctaWaveform} />
+        </Sequence>
+      )}
 
       {/* Muted-friendly captions over the product beats. */}
-      <TightCaptions captions={CAPTIONS} />
+      <TightCaptions captions={CAPTIONS} accent={accent} />
 
       {/* Voiceover (VO variant only). */}
       {voiceOver
@@ -992,4 +1342,78 @@ export const VibePromoMerged: React.FC<{ voiceOver?: boolean }> = ({ voiceOver =
         : null}
     </AbsoluteFill>
   );
+};
+
+export const VibePromoMerged: React.FC<{ voiceOver?: boolean; introV2?: boolean }> = ({ voiceOver = false, introV2 = false }) => {
+  const { BEAT, total } = introV2 ? LAYOUT_V2 : LAYOUT_V1;
+  const opening = introV2 ? (
+    <Sequence from={BEAT.intro2.from} durationInFrames={BEAT.intro2.dur} layout="none">
+      <VibeIntroCard />
+    </Sequence>
+  ) : (
+    <>
+      <Sequence from={BEAT.brand.from} durationInFrames={BEAT.brand.dur} layout="none">
+        <BrandBeat />
+      </Sequence>
+      <Sequence from={BEAT.hook.from} durationInFrames={BEAT.hook.dur} layout="none">
+        <HookCard />
+      </Sequence>
+      <Sequence from={BEAT.intro.from} durationInFrames={BEAT.intro.dur} layout="none">
+        <IntroGlow />
+      </Sequence>
+    </>
+  );
+  return <PromoTimeline BEAT={BEAT} total={total} voiceOver={voiceOver} opening={opening} />;
+};
+
+// ---- Split cut 1 — Build & publish your Vibe Agent -----------------------
+// Presentation-style intro copy: a "with Vibe Agent" lede (brand blue) over two
+// bullet points, instead of one run-on subtitle sentence.
+const IntroBullet: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+    <span style={{ width: 11, height: 11, borderRadius: 999, background: "#323dfe", flexShrink: 0 }} />
+    <span>{children}</span>
+  </div>
+);
+const BUILD_INTRO_SUBTITLE = (
+  <div style={{ display: "flex", flexDirection: "column", gap: 26 }}>
+    <div style={{ fontSize: 34, color: "#67686f" }}>
+      with <span style={{ color: "#323dfe", fontWeight: 700 }}>Vibe Agent</span>
+    </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 18, fontSize: 29, fontWeight: 500, color: "#3a3b42" }}>
+      <IntroBullet>No code. No dev team.</IntroBullet>
+      <IntroBullet>Build, test, and publish in minutes.</IntroBullet>
+    </div>
+  </div>
+);
+export const VibePromoBuild: React.FC<{ voiceOver?: boolean }> = ({ voiceOver = false }) => {
+  const { BEAT, total } = LAYOUT_BUILD;
+  const opening = (
+    <>
+      <Sequence from={BEAT.coldopen.from} durationInFrames={BEAT.coldopen.dur} layout="none">
+        <BuildColdOpen />
+      </Sequence>
+      <Sequence from={BEAT.buildtitle.from} durationInFrames={BEAT.buildtitle.dur} layout="none">
+        <VibeIntroCard
+          title={<>Build a <span style={{ color: "#323dfe" }}>voice AI agent</span></>}
+          subtitle={BUILD_INTRO_SUBTITLE}
+        />
+      </Sequence>
+    </>
+  );
+  return <PromoTimeline BEAT={BEAT} total={total} voiceOver={voiceOver} opening={opening} buddyContent={BUILD_BUDDY} voOverride={BUILD_VO_OVERRIDE} accent="#323dfe" ctaWaveform />;
+};
+
+// ---- Split cut 2 — Give your agent a phone number ------------------------
+export const VibePromoGoLive: React.FC<{ voiceOver?: boolean }> = ({ voiceOver = false }) => {
+  const { BEAT, total } = LAYOUT_GOLIVE;
+  const opening = (
+    <Sequence from={BEAT.golivetitle.from} durationInFrames={BEAT.golivetitle.dur} layout="none">
+      <VibeIntroCard
+        title={<>Give your agent a <span style={{ color: "#323dfe" }}>phone number</span></>}
+        subtitle="Buy a number, connect it to your published workflow, and make a test call."
+      />
+    </Sequence>
+  );
+  return <PromoTimeline BEAT={BEAT} total={total} voiceOver={voiceOver} opening={opening} accent="#323dfe" />;
 };

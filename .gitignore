@@ -25,3 +25,7 @@ assets/
 
 # Claude Code local settings (machine-specific)
 .claude/settings.local.json
+
+# source recordings over GitHub's comfortable size (kept local only)
+public/call-scheduling.mp4
+public/pipecat-demo.mp4
